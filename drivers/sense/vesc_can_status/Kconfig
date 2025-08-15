@@ -1,0 +1,15 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig SPINALI_SENSE_VESC_CAN_STATUS
+  bool "Sense VESC CAN STATUS"
+  help
+    This option enables vesc can status
+
+if SPINALI_SENSE_VESC_CAN_STATUS
+
+module = SPINALI_SENSE_VESC_CAN_STATUS
+module-str = sense_vesc_can_status
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_SENSE_VESC_CAN_STATUS

@@ -1,0 +1,18 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+config SPINALI_SYNAPSE_TOPIC
+  bool "Enable synapse topic shell"
+  default y
+  depends on ZROS
+  depends on SHELL
+  help
+    This option enables the synapse topic shell
+
+if SPINALI_SYNAPSE_TOPIC
+
+module = SPINALI_SYNAPSE_TOPIC
+module-str = synapse_topic
+source "subsys/logging/Kconfig.template.log_config"
+
+endif  # SPINALI_SYNAPSE_TOPIC

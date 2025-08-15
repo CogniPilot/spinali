@@ -1,0 +1,49 @@
+# Copyright (c) 2023 CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+manifest:
+
+  group-filter:
+    - +optional
+
+  self:
+    west-commands: scripts/west-commands.yml
+
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+    - name: cognipilot
+      url-base: https://github.com/CogniPilot
+
+  projects:
+    - name: zephyr
+      remote: cognipilot
+      west-commands: scripts/west-commands.yml
+      revision: rebase-mr-mcxn-t1
+      import:
+        - name-allowlist:
+          - nanopb
+          - mbedtls
+          - hal_nxp
+          - hal_afbr
+          - cmsis
+          - cmsis_6
+          - cmsis-dsp
+          - fatfs
+          - segger
+    - name: zros
+      remote: cognipilot
+      revision: 843348bca3a15e914914b90057369b9616302e20 # main 6/11/25
+      path: modules/lib/zros
+    - name: cyecca
+      remote: cognipilot
+      revision: 0acc0882eee8ab146371eca71bcb30157b76b250 # main 6/11/25
+      path: modules/lib/cyecca
+    - name: synapse_pb
+      remote: cognipilot
+      revision: be99b693c321e3c97e785fe447e056792d89fe34 # main 8/22/24
+      path: modules/lib/synapse_pb
+    - name: hal_nxp
+      remote: cognipilot
+      revision: 10f1faf465440e48ecad1ab2b5adee8c72f41157
+      path: modules/hal/nxp

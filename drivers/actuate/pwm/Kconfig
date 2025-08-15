@@ -1,0 +1,23 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig SPINALI_ACTUATE_PWM
+  bool "PWM"
+  depends on PWM
+  depends on ZROS
+  default y if DT_HAS_SPINALI_PWM_ACTUATORS_ENABLED
+  help
+    This option enables pwm actuators
+
+if SPINALI_ACTUATE_PWM
+
+config SPINALI_ACTUATE_PWM_SHELL
+  bool "Enable shell"
+  help
+    Enable shell
+
+module = SPINALI_ACTUATE_PWM
+module-str = actuate_pwm
+source "subsys/logging/Kconfig.template.log_config"
+
+endif #SPINALI_ACTUATE_PWM

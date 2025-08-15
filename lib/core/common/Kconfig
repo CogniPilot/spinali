@@ -1,0 +1,20 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+menuconfig SPINALI_CORE_COMMON
+  bool "Enable core common"
+  default y
+  help
+     This option enables the core common library
+
+if SPINALI_CORE_COMMON
+
+config SPINALI_CORE_COMMON_BOOT_BANNER
+  bool "Enable the boot banner"
+  help
+    Enable the boot banner
+
+module = SPINALI_CORE_COMMON
+module-str = core_common
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_CORE_COMMON

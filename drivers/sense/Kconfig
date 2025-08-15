@@ -1,0 +1,17 @@
+# Copyright (c) 2025 CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+menu "Sense"
+
+rsource "baro/Kconfig"
+rsource "imu/Kconfig"
+rsource "accel/Kconfig"
+rsource "icm42688/Kconfig"
+rsource "mag/Kconfig"
+rsource "power/Kconfig"
+rsource "safety/Kconfig"
+rsource "sbus/Kconfig"
+rsource "vesc_can_status/Kconfig"
+rsource "wheel_odometry/Kconfig"
+
+endmenu

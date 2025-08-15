@@ -1,0 +1,15 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+menuconfig SPINALI_CORE_WORKQUEUES
+  bool "Enable core work queues"
+  default y
+  help
+    This option enables the system work queues
+
+if SPINALI_CORE_WORKQUEUES
+
+module = SPINALI_CORE_WORKQUEUES
+module-str = core_workqueues
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_CORE_WORKQUEUES

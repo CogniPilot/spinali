@@ -1,0 +1,17 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+menuconfig SPINALI_SENSE_SAFETY
+  bool "Safety"
+  default y
+  depends on ZROS
+  depends on SPINALI_CORE_WORKQUEUES
+  help
+    This option enables the safety interface
+
+if SPINALI_SENSE_SAFETY
+
+module = SPINALI_SENSE_SAFETY
+module-str = sense_safety
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_SENSE_SAFETY

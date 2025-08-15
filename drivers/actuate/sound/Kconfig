@@ -1,0 +1,16 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig SPINALI_ACTUATE_SOUND
+  bool "SOUND"
+  depends on PWM
+  help
+    This option enables sound tones
+
+if SPINALI_ACTUATE_SOUND
+
+module = SPINALI_ACTUATE_SOUND
+module-str = actuate_sound
+source "subsys/logging/Kconfig.template.log_config"
+
+endif #SPINALI_ACTUATE_SOUND

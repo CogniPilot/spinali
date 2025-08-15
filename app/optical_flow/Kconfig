@@ -1,0 +1,19 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "CogniPilot - SPINALI - OPTICAL FLOW"
+menu "Zephyr"
+source "Kconfig.zephyr"
+endmenu
+
+menu "OPTICAL_FLOW"
+
+config SPINALI_OPTICAL_FLOW_LIGHTING
+  bool "enable lighting"
+  help
+    Enable lighting
+
+module = SPINALI_OPTICAL_FLOW
+module-str = spinali_optical_flow
+source "subsys/logging/Kconfig.template.log_config"
+endmenu

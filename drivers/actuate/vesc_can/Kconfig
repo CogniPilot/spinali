@@ -1,0 +1,23 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig SPINALI_ACTUATE_VESC_CAN
+  bool "VESC_CAN"
+  depends on CAN
+  depends on ZROS
+  default y if DT_HAS_SPINALI_VESC_CAN_ACTUATORS_ENABLED
+  help
+    This option enables vesc_can actuators
+
+if SPINALI_ACTUATE_VESC_CAN
+
+config SPINALI_ACTUATE_VESC_CAN_SHELL
+  bool "Enable shell"
+  help
+    Enable shell
+
+module = SPINALI_ACTUATE_VESC_CAN
+module-str = actuate_vesc_can
+source "subsys/logging/Kconfig.template.log_config"
+
+endif #SPINALI_ACTUATE_VESC_CAN

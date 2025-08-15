@@ -1,0 +1,43 @@
+# Copyright (c) 2021 Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
+#
+# This Kconfig file is picked by the Zephyr build system because it is defined
+# as the module Kconfig entry point (see zephyr/module.yml). You can browse
+# module options by going to Zephyr -> Modules in Kconfig.
+
+menu "Version"
+
+config SPINALI_BOOT_BANNER
+  bool "spinali boot banner"
+  default y
+  help
+    Enable spinali boot banner
+
+config SPINALI_APP_NAME
+  string "spinali app name"
+  help
+    This spinali app name
+
+config SPINALI_VERSION_MAJOR
+  int "major version"
+  default 0
+  help
+    This spinali major version
+
+config SPINALI_VERSION_MINOR
+  int "minor version"
+  default 1
+  help
+    This spinali minor version
+
+config SPINALI_VERSION_PATCH
+  int "patch version"
+  default 0
+  help
+    This spinali patch version
+
+endmenu
+
+rsource "lib/Kconfig"
+rsource "drivers/Kconfig"
+

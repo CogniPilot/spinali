@@ -1,0 +1,17 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+menuconfig SPINALI_SENSE_WHEEL_ODOMETRY
+  bool "Wheel Odometry"
+  depends on ZROS
+  depends on SPINALI_CORE_COMMON
+  depends on SYNAPSE_PB
+  help
+    This option enables the wheel odometry driver interface
+
+if SPINALI_SENSE_WHEEL_ODOMETRY
+
+module = SPINALI_SENSE_WHEEL_ODOMETRY
+module-str = sense_wheel_odometry
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_SENSE_WHEEL_ODOMETRY

@@ -1,0 +1,16 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+menuconfig SPINALI_SENSE_ICM42688
+  bool "ICM42688"
+  depends on SPINALI_CORE_COMMON
+  depends on ZROS
+  help
+    This option enables the ICM42688 driver interface
+
+if SPINALI_SENSE_ICM42688
+
+module = SPINALI_SENSE_ICM42688
+module-str = sense_accel
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_SENSE_ICM42688

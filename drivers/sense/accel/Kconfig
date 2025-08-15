@@ -1,0 +1,23 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+menuconfig SPINALI_SENSE_ACCEL
+  bool "ACCEL"
+  depends on SPINALI_CORE_COMMON
+  depends on ZROS
+  help
+    This option enables the ACCEL driver interface
+
+if SPINALI_SENSE_ACCEL
+
+config SPINALI_SENSE_ACCEL_COUNT
+  int "Number of accelerometers"
+  default 1
+  range 1 4
+  help
+    Defines number of accelerometers 1-4
+
+module = SPINALI_SENSE_ACCEL
+module-str = sense_accel
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_SENSE_ACCEL
