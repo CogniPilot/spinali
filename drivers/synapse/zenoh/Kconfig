@@ -1,0 +1,17 @@
+# Copyright (c) 2025, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+config SPINALI_SYNAPSE_ZENOH
+  bool "Zenoh"	
+  default y
+  depends on ZROS && ZENOH_PICO
+  help
+    This option enables the synapse Zenoh interface
+
+if SPINALI_SYNAPSE_ZENOH
+
+module = SPINALI_SYNAPSE_ZENOH
+module-str = synapse_zenoh
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_SYNAPSE_ZENOH
