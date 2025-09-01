@@ -60,11 +60,49 @@ ZTEST(bmp581, test_baro_rdy)
     zassert_true(device_is_ready(dev_bmp581), "Device was not ready");
 }
 
+ZTEST(bmp581, test_get_baro_data)
+{
+    struct sensor_value baro_press[1], baro_temp[1];
+    int err;
+
+    err = sensor_sample_fetch(dev_bmp581);
+    zassert_equal(err, 0, "Barometer could not fetch data (err %d)", err);
+
+    err = sensor_channel_get(dev_bmp581, SENSOR_CHAN_PRESS, baro_press);
+    zassert_equal(err, 0, "Barometer could not get pressure data (err %d)", err);
+
+    err = sensor_channel_get(dev_bmp581, SENSOR_CHAN_AMBIENT_TEMP, baro_temp);
+    zassert_equal(err, 0, "Barometer could not get ambient temperature data (err %d)", err);
+
+    printf("%s: \t Pressure: %d.%06d; Ta: %d.%06d;\n",
+			   dev_bmp581->name,
+		       baro_press[0].val1, baro_press[0].val2,
+		       baro_temp[0].val1, baro_temp[0].val2);
+}
+
 ZTEST_SUITE(bmp581, NULL, NULL, NULL, NULL, NULL);
 
 ZTEST(bmm350, test_mag_rdy)
 {
     zassert_true(device_is_ready(dev_bmm350), "Device was not ready");
+}
+
+ZTEST(bmm350, test_get_mag_data)
+{
+    struct sensor_value mag_xyz[3];
+    int err;
+
+    err = sensor_sample_fetch(dev_bmm350);
+    zassert_equal(err, 0, "Magnetometer could not fetch data (err %d)", err);
+
+    err = sensor_channel_get(dev_bmm350, SENSOR_CHAN_MAGN_XYZ, mag_xyz);
+    zassert_equal(err, 0, "Magnetometer could not get XYZ data (err %d)", err);
+
+    printf("%s: \t X: %d.%06d; Y: %d.%06d; Z: %d.%06d;\n",
+			   dev_bmm350->name,
+		       mag_xyz[0].val1, mag_xyz[0].val2,
+		       mag_xyz[1].val1, mag_xyz[1].val2,
+		       mag_xyz[2].val1, mag_xyz[2].val2);
 }
 
 ZTEST_SUITE(bmm350, NULL, NULL, NULL, NULL, NULL);
