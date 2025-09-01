@@ -1,0 +1,48 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright 2025 CogniPilot Foundation */
+
+/ {
+	aliases {
+		icm45686base	= &icm45686_0;
+		icm45686opt 	= &icm45686_1;
+		icm42688 		= &icm42688;
+		paa3905  		= &paa3905;
+		afbr 			= &afbr_s50;
+	};
+};
+
+&icm45686_0 {
+	spi-max-frequency = <20000000>;
+	accel-pwr-mode = <ICM45686_DT_ACCEL_LN>;
+	accel-fs = <ICM45686_DT_ACCEL_FS_32>;
+	accel-odr = <ICM45686_DT_ACCEL_ODR_6400>;
+	accel-lpf = <ICM45686_DT_ACCEL_LPF_BW_1_32>;
+	gyro-pwr-mode = <ICM45686_DT_GYRO_LN>;
+	gyro-fs = <ICM45686_DT_GYRO_FS_4000>;
+	gyro-odr = <ICM45686_DT_GYRO_ODR_6400>;
+	gyro-lpf = <ICM45686_DT_GYRO_LPF_BW_1_32>;
+};
+
+&icm45686_1 {
+	spi-max-frequency = <20000000>;
+	accel-pwr-mode = <ICM45686_DT_ACCEL_LN>;
+	accel-fs = <ICM45686_DT_ACCEL_FS_2>;
+	accel-odr = <ICM45686_DT_ACCEL_ODR_400>;
+	accel-lpf = <ICM45686_DT_ACCEL_LPF_BW_1_32>;
+	gyro-pwr-mode = <ICM45686_DT_GYRO_LN>;
+	gyro-fs = <ICM45686_DT_GYRO_FS_4000>;
+	gyro-odr = <ICM45686_DT_GYRO_ODR_400>;
+	gyro-lpf = <ICM45686_DT_GYRO_LPF_BW_1_32>;
+};
+
+&i3c0 {
+	status = "okay"; /* Locks-up on startup with busy wait */
+};
+
+&bmm350_0 {
+	status = "okay"; /* Locks-up on startup with busy wait */
+};
+
+&bmp581_0 {
+	status = "okay"; /* Locks-up on startup with busy wait */
+};

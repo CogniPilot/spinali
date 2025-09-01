@@ -1,0 +1,6 @@
+
+tests:
+  optical_flow_test:
+    platform_allow: mr_mcxn_t1
+    tags: optical
+    build_only: false
