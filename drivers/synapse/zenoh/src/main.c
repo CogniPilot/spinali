@@ -13,6 +13,8 @@
 #include <zros/zros_node.h>
 #include <zros/zros_sub.h>
 
+#include <zenoh-pico.h>
+
 #include <pb_encode.h>
 
 #include <synapse_topic_list.h>
@@ -20,6 +22,9 @@
 #define MY_STACK_SIZE 8192
 #define MY_PRIORITY   1
 #define TX_BUF_SIZE   8192
+
+#define NET_MODE_SIZE sizeof("client")
+#define NET_LOCATOR_SIZE 64
 
 LOG_MODULE_REGISTER(zenoh, LOG_LEVEL_DBG);
 
@@ -34,7 +39,7 @@ struct context {
 	synapse_pb_Frame tx_frame;
 	synapse_pb_Imu imu;
 	// connections
-	// TODO Zenoh
+	z_owned_session_t s;
 	// status
 	struct k_sem running;
 	size_t stack_size;
@@ -79,6 +84,56 @@ static void send_frame(struct context *ctx, pb_size_t which_msg)
 	}
 }
 
+static int zenoh_session_init(struct context *ctx)
+{
+	char mode[NET_MODE_SIZE];
+	char locator[NET_LOCATOR_SIZE];
+	z_owned_config_t config;
+	int ret = 0;
+
+	// TODO DYNAMIC
+	strcpy(mode, "client");
+	strcpy(locator, "127.0.0.1");
+
+	LOG_INF("Opening session...");
+
+	do {
+		z_config_default(&config);
+		zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, mode);
+
+		if (locator[0] != 0) {
+			zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, locator);
+
+		} else if (strcmp(Z_CONFIG_MODE_PEER, mode) == 0) {
+			zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, Z_CONFIG_MULTICAST_LOCATOR_DEFAULT);
+		}
+
+		if (ret == _Z_ERR_TRANSPORT_OPEN_FAILED) {
+			LOG_WRN("Unable to open session, make sure zenohd is running on %s", locator);
+
+		} else if (ret == _Z_ERR_SCOUT_NO_RESULTS) {
+			LOG_WRN("Unable to open session, scout no results");
+
+		} else if (ret < 0) {
+			LOG_WRN("Unable to open session, ret: %d", ret);
+		}
+
+		if (ret != 0) {
+			sleep(5); // Wait 5 seconds when doing a retry
+		}
+
+	} while ((ret = z_open(&ctx->s, z_move(config), NULL)) < 0);
+
+	// Start read and lease tasks for zenoh-pico
+	if (zp_start_read_task(z_loan_mut(ctx->s), NULL) < 0 || zp_start_lease_task(z_loan_mut(ctx->s), NULL) < 0) {
+		LOG_ERR("Unable to start read and lease tasks");
+		z_drop(z_move(ctx->s));
+		ret = -EINVAL;
+	}
+
+	return ret;
+}
+
 static int zenoh_init(struct context *ctx)
 {
 	int ret = 0;
@@ -93,6 +148,7 @@ static int zenoh_init(struct context *ctx)
 	}
 
 	// initialize Zenoh
+	zenoh_session_init(ctx);
 
 	k_sem_take(&ctx->running, K_FOREVER);
 	LOG_INF("init");
