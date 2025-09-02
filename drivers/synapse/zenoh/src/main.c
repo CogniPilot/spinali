@@ -25,8 +25,18 @@
 
 #define NET_MODE_SIZE sizeof("client")
 #define NET_LOCATOR_SIZE 64
+#define KEYEXPR_RIHS01_SIZE sizeof("RIHS01_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+#define KEYEXPR_MSG_NAME "spinali_msgs::msg::dds_::"
+#define KEYEXPR_MSG_NAME_SIZE sizeof(KEYEXPR_MSG_NAME)
+#define TOPIC_INFO_SIZE (96)
+#define MAX_LINE_SIZE (2 * TOPIC_INFO_SIZE)
+#define KEYEXPR_SIZE (MAX_LINE_SIZE + KEYEXPR_MSG_NAME_SIZE + KEYEXPR_RIHS01_SIZE + 128)
 
 LOG_MODULE_REGISTER(zenoh, LOG_LEVEL_DBG);
+
+//FIXME proper GUID
+static uint8_t zenoh_guid[16];
+static const uint16_t domain_id = 7;
 
 static K_THREAD_STACK_DEFINE(g_my_stack_area, MY_STACK_SIZE);
 
@@ -84,6 +94,113 @@ static void send_frame(struct context *ctx, pb_size_t which_msg)
 	}
 }
 
+static int generate_rmw_zenoh_node_liveliness_keyexpr(const z_id_t *id, char *keyexpr)
+{
+	return snprintf(keyexpr, KEYEXPR_SIZE,
+			"@ros2_lv/0/%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/0/0/NN/%%/%%/"
+			"spinali_%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+			id->id[0], id->id[1],  id->id[2], id->id[3], id->id[4], id->id[5], id->id[6],
+			id->id[7], id->id[8],  id->id[9], id->id[10], id->id[11], id->id[12], id->id[13],
+			id->id[14], id->id[15],
+			zenoh_guid[0], zenoh_guid[1], zenoh_guid[2], zenoh_guid[3],
+			zenoh_guid[4], zenoh_guid[5], zenoh_guid[6], zenoh_guid[7],
+			zenoh_guid[8], zenoh_guid[9], zenoh_guid[10], zenoh_guid[11],
+			zenoh_guid[12], zenoh_guid[13], zenoh_guid[14], zenoh_guid[15]);
+}
+
+int generate_rmw_zenoh_topic_liveliness_keyexpr(const z_id_t *id, const char *topic, const uint8_t *rihs_hash,
+		char *type_camel_case, char *keyexpr, const char *entity_str)
+{
+	// NOT REALLY COMPLIANT WITH RMW_ZENOH_CPP but get's the job done
+	// TODO build a correct keyexpr
+
+	char topic_lv[TOPIC_INFO_SIZE];
+	char *str = &topic_lv[0];
+
+	strncpy(topic_lv, topic, sizeof(topic_lv));
+
+	while (*str) {
+		if (*str == '/') {
+			*str = '%';
+		}
+
+		str++;
+	}
+
+	return snprintf(keyexpr, KEYEXPR_SIZE,
+			"@ros2_lv/%" PRId32 "/"
+			"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/"
+			"0/11/%s/%%/%%/spinali_%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/%s/"
+			KEYEXPR_MSG_NAME "%s_/RIHS01_"
+			"%02x%02x%02x%02x%02x%02x%02x%02x"
+			"%02x%02x%02x%02x%02x%02x%02x%02x"
+			"%02x%02x%02x%02x%02x%02x%02x%02x"
+			"%02x%02x%02x%02x%02x%02x%02x%02x"
+			"/::,7:,:,:,,",
+			domain_id,
+			id->id[0], id->id[1],  id->id[2], id->id[3], id->id[4], id->id[5], id->id[6],
+			id->id[7], id->id[8],  id->id[9], id->id[10], id->id[11], id->id[12], id->id[13],
+			id->id[14], id->id[15],
+			entity_str,
+			zenoh_guid[0], zenoh_guid[1], zenoh_guid[2], zenoh_guid[3],
+			zenoh_guid[4], zenoh_guid[5], zenoh_guid[6], zenoh_guid[7],
+			zenoh_guid[8], zenoh_guid[9], zenoh_guid[10], zenoh_guid[11],
+			zenoh_guid[12], zenoh_guid[13], zenoh_guid[14], zenoh_guid[15],
+			topic_lv, type_camel_case,
+			rihs_hash[0], rihs_hash[1], rihs_hash[2], rihs_hash[3],
+			rihs_hash[4], rihs_hash[5], rihs_hash[6], rihs_hash[7],
+			rihs_hash[8], rihs_hash[9], rihs_hash[10], rihs_hash[11],
+			rihs_hash[12], rihs_hash[13], rihs_hash[14], rihs_hash[15],
+			rihs_hash[16], rihs_hash[17], rihs_hash[18], rihs_hash[19],
+			rihs_hash[20], rihs_hash[21], rihs_hash[22], rihs_hash[23],
+			rihs_hash[24], rihs_hash[25], rihs_hash[26], rihs_hash[27],
+			rihs_hash[28], rihs_hash[29], rihs_hash[30], rihs_hash[31]
+		       );
+}
+
+static int zenoh_liveliness_init(struct context *ctx)
+{
+	char keyexpr[KEYEXPR_SIZE];
+
+	z_id_t self_id = z_info_zid(z_loan(ctx->s));
+
+	if (generate_rmw_zenoh_node_liveliness_keyexpr(&self_id, keyexpr)) {
+		
+		z_view_keyexpr_t ke;
+
+		if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
+			LOG_ERR("%s is not a valid key expression", keyexpr);
+			return -1;
+		}
+
+		z_owned_liveliness_token_t token;
+
+		if (z_liveliness_declare_token(z_loan(ctx->s), &token, z_loan(ke), NULL) < 0) {
+			LOG_ERR("Unable to create liveliness token!");
+			return -1;
+		}
+	}
+
+	uint8_t rihs[32];
+	generate_rmw_zenoh_topic_liveliness_keyexpr(&self_id, "hello_world", rihs, "String", keyexpr, "MS");
+
+	z_view_keyexpr_t ke;
+
+	if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
+		LOG_ERR("%s is not a valid key expression\n", keyexpr);
+		return -1;
+	}
+
+	z_owned_liveliness_token_t token;
+
+	if (z_liveliness_declare_token(z_loan(ctx->s), &token, z_loan(ke), NULL) < 0) {
+		LOG_ERR("Unable to create liveliness token!\n");
+		return -1;
+	}
+
+	return 0;
+}
+
 static int zenoh_session_init(struct context *ctx)
 {
 	char mode[NET_MODE_SIZE];
@@ -93,7 +210,7 @@ static int zenoh_session_init(struct context *ctx)
 
 	// TODO DYNAMIC
 	strcpy(mode, "client");
-	strcpy(locator, "127.0.0.1");
+	strcpy(locator, "tcp/192.0.2.2:7447");
 
 	LOG_INF("Opening session...");
 
@@ -130,6 +247,8 @@ static int zenoh_session_init(struct context *ctx)
 		z_drop(z_move(ctx->s));
 		ret = -EINVAL;
 	}
+
+	zenoh_liveliness_init(ctx);
 
 	return ret;
 }
