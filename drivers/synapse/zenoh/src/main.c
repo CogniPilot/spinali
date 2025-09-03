@@ -23,18 +23,40 @@
 #define MY_PRIORITY   1
 #define TX_BUF_SIZE   8192
 
-#define NET_MODE_SIZE sizeof("client")
+#define NET_MODE_SIZE    sizeof("client")
 #define NET_LOCATOR_SIZE 64
-#define KEYEXPR_RIHS01_SIZE sizeof("RIHS01_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-#define KEYEXPR_MSG_NAME "spinali_msgs::msg::dds_::"
+#define KEYEXPR_RIHS01_SIZE                                                                        \
+	sizeof("RIHS01_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+#define KEYEXPR_MSG_NAME      "std_msgs::msg::dds_::"
 #define KEYEXPR_MSG_NAME_SIZE sizeof(KEYEXPR_MSG_NAME)
-#define TOPIC_INFO_SIZE (96)
-#define MAX_LINE_SIZE (2 * TOPIC_INFO_SIZE)
-#define KEYEXPR_SIZE (MAX_LINE_SIZE + KEYEXPR_MSG_NAME_SIZE + KEYEXPR_RIHS01_SIZE + 128)
+#define TOPIC_INFO_SIZE       (96)
+#define MAX_LINE_SIZE         (2 * TOPIC_INFO_SIZE)
+#define KEYEXPR_SIZE          (MAX_LINE_SIZE + KEYEXPR_MSG_NAME_SIZE + KEYEXPR_RIHS01_SIZE + 128)
+
+/* Derived from ROS2 rmw
+ * https://github.com/ros2/rmw/blob/e6addf2411b8ee8a2ac43d691533b8c05ae8f1b6/rmw/include/rmw/types.h#L44
+ */
+#define RMW_GID_STORAGE_SIZE 16u
+
+/* See rmw_zenoh design.md for more information
+ * https://github.com/ros2/rmw_zenoh/blob/rolling/docs/design.md#publishers */
+#define RMW_ATTACHEMENT_SIZE (8u + 8u + 1u + RMW_GID_STORAGE_SIZE)
+
+// CDR Xtypes header {0x00, 0x01} indicates it's Little Endian (CDR_LE representation)
+const uint8_t ros2_header[4] = {0x00, 0x01, 0x00, 0x00};
+
+typedef struct __attribute__((__packed__)) RmwAttachment {
+	int64_t sequence_number;
+	int64_t time;
+	uint8_t rmw_gid_size;
+	uint8_t rmw_gid[RMW_GID_STORAGE_SIZE];
+} RmwAttachment;
+
+RmwAttachment _attachment = {0, 0, RMW_GID_STORAGE_SIZE};
 
 LOG_MODULE_REGISTER(zenoh, LOG_LEVEL_DBG);
 
-//FIXME proper GUID
+// FIXME proper GUID
 static uint8_t zenoh_guid[16];
 static const uint16_t domain_id = 7;
 
@@ -50,6 +72,8 @@ struct context {
 	synapse_pb_Imu imu;
 	// connections
 	z_owned_session_t s;
+	// TODO make list a
+	z_owned_publisher_t pub;
 	// status
 	struct k_sem running;
 	size_t stack_size;
@@ -88,28 +112,69 @@ static void send_frame(struct context *ctx, pb_size_t which_msg)
 	if (!pb_encode_ex(&stream, synapse_pb_Frame_fields, frame, PB_ENCODE_DELIMITED)) {
 		LOG_ERR("encoding failed: %s", PB_GET_ERROR(&stream));
 	} else {
-		//udp_tx_send(&ctx->udp, tx_buf, stream.bytes_written);
+		uint8_t buf[sizeof(ros2_header) + 4];
+		memcpy(buf, ros2_header, sizeof(ros2_header));
+		int32_t value = (int32_t)_attachment.sequence_number;
+		memcpy(buf + 4, &value, 4);
+
+		// udp_tx_send(&ctx->udp, tx_buf, stream.bytes_written);
 		LOG_ERR("TODO SEND Zenoh size %d", stream.bytes_written);
-		//TODO Zenoh
+		// TODO Zenoh
+
+		z_publisher_put_options_t options;
+		z_publisher_put_options_default(&options);
+
+		_attachment.sequence_number++;
+		_attachment.time = 0; // FIXME
+
+		z_owned_bytes_t z_attachment;
+		z_bytes_from_static_buf(&z_attachment, (const uint8_t *)&_attachment,
+					RMW_ATTACHEMENT_SIZE);
+
+		options.attachment = z_move(z_attachment);
+
+		z_owned_bytes_t payload;
+		z_bytes_copy_from_buf(&payload, &buf, 8);
+		z_publisher_put(z_loan(ctx->pub), z_move(payload), &options);
 	}
 }
 
 static int generate_rmw_zenoh_node_liveliness_keyexpr(const z_id_t *id, char *keyexpr)
 {
-	return snprintf(keyexpr, KEYEXPR_SIZE,
-			"@ros2_lv/0/%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/0/0/NN/%%/%%/"
-			"spinali_%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-			id->id[0], id->id[1],  id->id[2], id->id[3], id->id[4], id->id[5], id->id[6],
-			id->id[7], id->id[8],  id->id[9], id->id[10], id->id[11], id->id[12], id->id[13],
-			id->id[14], id->id[15],
-			zenoh_guid[0], zenoh_guid[1], zenoh_guid[2], zenoh_guid[3],
-			zenoh_guid[4], zenoh_guid[5], zenoh_guid[6], zenoh_guid[7],
-			zenoh_guid[8], zenoh_guid[9], zenoh_guid[10], zenoh_guid[11],
-			zenoh_guid[12], zenoh_guid[13], zenoh_guid[14], zenoh_guid[15]);
+	return snprintf(
+		keyexpr, KEYEXPR_SIZE,
+		"@ros2_lv/0/%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/0/0/"
+		"NN/%%/%%/"
+		"spinali_%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+		id->id[0], id->id[1], id->id[2], id->id[3], id->id[4], id->id[5], id->id[6],
+		id->id[7], id->id[8], id->id[9], id->id[10], id->id[11], id->id[12], id->id[13],
+		id->id[14], id->id[15], zenoh_guid[0], zenoh_guid[1], zenoh_guid[2], zenoh_guid[3],
+		zenoh_guid[4], zenoh_guid[5], zenoh_guid[6], zenoh_guid[7], zenoh_guid[8],
+		zenoh_guid[9], zenoh_guid[10], zenoh_guid[11], zenoh_guid[12], zenoh_guid[13],
+		zenoh_guid[14], zenoh_guid[15]);
 }
 
-int generate_rmw_zenoh_topic_liveliness_keyexpr(const z_id_t *id, const char *topic, const uint8_t *rihs_hash,
-		char *type_camel_case, char *keyexpr, const char *entity_str)
+int generate_rmw_zenoh_topic_keyexpr(const char *topic, const uint8_t *rihs_hash,
+				     char *type_camel_case, char *keyexpr)
+{
+	return snprintf(keyexpr, KEYEXPR_SIZE,
+			"%" PRId32 "%s/" KEYEXPR_MSG_NAME "%s_/RIHS01_"
+			"%02x%02x%02x%02x%02x%02x%02x%02x"
+			"%02x%02x%02x%02x%02x%02x%02x%02x"
+			"%02x%02x%02x%02x%02x%02x%02x%02x"
+			"%02x%02x%02x%02x%02x%02x%02x%02x",
+			domain_id, topic, type_camel_case, rihs_hash[0], rihs_hash[1], rihs_hash[2],
+			rihs_hash[3], rihs_hash[4], rihs_hash[5], rihs_hash[6], rihs_hash[7],
+			rihs_hash[8], rihs_hash[9], rihs_hash[10], rihs_hash[11], rihs_hash[12],
+			rihs_hash[13], rihs_hash[14], rihs_hash[15], rihs_hash[16], rihs_hash[17],
+			rihs_hash[18], rihs_hash[19], rihs_hash[20], rihs_hash[21], rihs_hash[22],
+			rihs_hash[23], rihs_hash[24], rihs_hash[25], rihs_hash[26], rihs_hash[27],
+			rihs_hash[28], rihs_hash[29], rihs_hash[30], rihs_hash[31]);
+}
+
+int generate_rmw_zenoh_topic_liveliness_keyexpr(const z_id_t *id, const char *topic,
+						const uint8_t *rihs_hash, char *type_camel_case,
+						char *keyexpr, const char *entity_str)
 {
 	// NOT REALLY COMPLIANT WITH RMW_ZENOH_CPP but get's the job done
 	// TODO build a correct keyexpr
@@ -130,32 +195,27 @@ int generate_rmw_zenoh_topic_liveliness_keyexpr(const z_id_t *id, const char *to
 	return snprintf(keyexpr, KEYEXPR_SIZE,
 			"@ros2_lv/%" PRId32 "/"
 			"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/"
-			"0/11/%s/%%/%%/spinali_%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/%s/"
-			KEYEXPR_MSG_NAME "%s_/RIHS01_"
+			"0/11/%s/%%/%%/"
+			"spinali_%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/"
+			"%s/" KEYEXPR_MSG_NAME "%s_/RIHS01_"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
 			"/::,7:,:,:,,",
-			domain_id,
-			id->id[0], id->id[1],  id->id[2], id->id[3], id->id[4], id->id[5], id->id[6],
-			id->id[7], id->id[8],  id->id[9], id->id[10], id->id[11], id->id[12], id->id[13],
-			id->id[14], id->id[15],
-			entity_str,
-			zenoh_guid[0], zenoh_guid[1], zenoh_guid[2], zenoh_guid[3],
-			zenoh_guid[4], zenoh_guid[5], zenoh_guid[6], zenoh_guid[7],
-			zenoh_guid[8], zenoh_guid[9], zenoh_guid[10], zenoh_guid[11],
-			zenoh_guid[12], zenoh_guid[13], zenoh_guid[14], zenoh_guid[15],
-			topic_lv, type_camel_case,
-			rihs_hash[0], rihs_hash[1], rihs_hash[2], rihs_hash[3],
-			rihs_hash[4], rihs_hash[5], rihs_hash[6], rihs_hash[7],
-			rihs_hash[8], rihs_hash[9], rihs_hash[10], rihs_hash[11],
-			rihs_hash[12], rihs_hash[13], rihs_hash[14], rihs_hash[15],
-			rihs_hash[16], rihs_hash[17], rihs_hash[18], rihs_hash[19],
-			rihs_hash[20], rihs_hash[21], rihs_hash[22], rihs_hash[23],
-			rihs_hash[24], rihs_hash[25], rihs_hash[26], rihs_hash[27],
-			rihs_hash[28], rihs_hash[29], rihs_hash[30], rihs_hash[31]
-		       );
+			domain_id, id->id[0], id->id[1], id->id[2], id->id[3], id->id[4], id->id[5],
+			id->id[6], id->id[7], id->id[8], id->id[9], id->id[10], id->id[11],
+			id->id[12], id->id[13], id->id[14], id->id[15], entity_str, zenoh_guid[0],
+			zenoh_guid[1], zenoh_guid[2], zenoh_guid[3], zenoh_guid[4], zenoh_guid[5],
+			zenoh_guid[6], zenoh_guid[7], zenoh_guid[8], zenoh_guid[9], zenoh_guid[10],
+			zenoh_guid[11], zenoh_guid[12], zenoh_guid[13], zenoh_guid[14],
+			zenoh_guid[15], topic_lv, type_camel_case, rihs_hash[0], rihs_hash[1],
+			rihs_hash[2], rihs_hash[3], rihs_hash[4], rihs_hash[5], rihs_hash[6],
+			rihs_hash[7], rihs_hash[8], rihs_hash[9], rihs_hash[10], rihs_hash[11],
+			rihs_hash[12], rihs_hash[13], rihs_hash[14], rihs_hash[15], rihs_hash[16],
+			rihs_hash[17], rihs_hash[18], rihs_hash[19], rihs_hash[20], rihs_hash[21],
+			rihs_hash[22], rihs_hash[23], rihs_hash[24], rihs_hash[25], rihs_hash[26],
+			rihs_hash[27], rihs_hash[28], rihs_hash[29], rihs_hash[30], rihs_hash[31]);
 }
 
 static int zenoh_liveliness_init(struct context *ctx)
@@ -165,7 +225,7 @@ static int zenoh_liveliness_init(struct context *ctx)
 	z_id_t self_id = z_info_zid(z_loan(ctx->s));
 
 	if (generate_rmw_zenoh_node_liveliness_keyexpr(&self_id, keyexpr)) {
-		
+
 		z_view_keyexpr_t ke;
 
 		if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
@@ -181,8 +241,15 @@ static int zenoh_liveliness_init(struct context *ctx)
 		}
 	}
 
-	uint8_t rihs[32];
-	generate_rmw_zenoh_topic_liveliness_keyexpr(&self_id, "hello_world", rihs, "String", keyexpr, "MS");
+	// TODO move this part to the actual publisher/subscriber
+
+	// RIHS01_b6578ded3c58c626cfe8d1a6fb6e04f706f97e9f03d2727c9ff4e74b1cef0deb
+	const uint8_t rihs[32] = {0xb6, 0x57, 0x8d, 0xed, 0x3c, 0x58, 0xc6, 0x26, 0xcf, 0xe8, 0xd1,
+				  0xa6, 0xfb, 0x6e, 0x04, 0xf7, 0x06, 0xf9, 0x7e, 0x9f, 0x03, 0xd2,
+				  0x72, 0x7c, 0x9f, 0xf4, 0xe7, 0x4b, 0x1c, 0xef, 0x0d, 0xeb};
+
+	generate_rmw_zenoh_topic_liveliness_keyexpr(&self_id, "/hello_world", rihs, "Int32",
+						    keyexpr, "MP");
 
 	z_view_keyexpr_t ke;
 
@@ -195,6 +262,19 @@ static int zenoh_liveliness_init(struct context *ctx)
 
 	if (z_liveliness_declare_token(z_loan(ctx->s), &token, z_loan(ke), NULL) < 0) {
 		LOG_ERR("Unable to create liveliness token!\n");
+		return -1;
+	}
+
+	// Dummy publisher test
+	generate_rmw_zenoh_topic_keyexpr("/hello_world", rihs, "Int32", keyexpr);
+
+	if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
+		LOG_ERR("%s is not a valid key expression", keyexpr);
+		return -1;
+	}
+
+	if (z_declare_publisher(z_loan(ctx->s), &ctx->pub, z_loan(ke), NULL) < 0) {
+		LOG_ERR("Unable to declare publisher for key expression!");
 		return -1;
 	}
 
@@ -222,11 +302,13 @@ static int zenoh_session_init(struct context *ctx)
 			zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, locator);
 
 		} else if (strcmp(Z_CONFIG_MODE_PEER, mode) == 0) {
-			zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, Z_CONFIG_MULTICAST_LOCATOR_DEFAULT);
+			zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY,
+					 Z_CONFIG_MULTICAST_LOCATOR_DEFAULT);
 		}
 
 		if (ret == _Z_ERR_TRANSPORT_OPEN_FAILED) {
-			LOG_WRN("Unable to open session, make sure zenohd is running on %s", locator);
+			LOG_WRN("Unable to open session, make sure zenohd is running on %s",
+				locator);
 
 		} else if (ret == _Z_ERR_SCOUT_NO_RESULTS) {
 			LOG_WRN("Unable to open session, scout no results");
@@ -242,7 +324,8 @@ static int zenoh_session_init(struct context *ctx)
 	} while ((ret = z_open(&ctx->s, z_move(config), NULL)) < 0);
 
 	// Start read and lease tasks for zenoh-pico
-	if (zp_start_read_task(z_loan_mut(ctx->s), NULL) < 0 || zp_start_lease_task(z_loan_mut(ctx->s), NULL) < 0) {
+	if (zp_start_read_task(z_loan_mut(ctx->s), NULL) < 0 ||
+	    zp_start_lease_task(z_loan_mut(ctx->s), NULL) < 0) {
 		LOG_ERR("Unable to start read and lease tasks");
 		z_drop(z_move(ctx->s));
 		ret = -EINVAL;
