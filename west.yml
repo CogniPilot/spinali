@@ -53,3 +53,11 @@ manifest:
       url: https://github.com/eclipse-zenoh/zenoh-pico.git
       revision: main
       path: modules/lib/zenoh-pico
+    - name: cyclonedds
+      url: https://github.com/CogniPilot/cyclonedds
+      revision: 314887ca403c2fb0a0316add22672102936ed36c
+      path: modules/lib/cyclonedds
+    - name: synapse_msgs
+      url: https://github.com/CogniPilot/synapse_msgs
+      revision: spinali_cdr
+      path: modules/lib/synapse_msgs

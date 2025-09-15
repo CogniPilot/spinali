@@ -10,4 +10,8 @@ zephyr_library_sources(
   src/main.c
   )
 
+
 add_dependencies(spinali_synapse_zenoh synapse_pb)
+add_dependencies(spinali_synapse_zenoh cdr)
+
+target_link_libraries(spinali_synapse_zenoh PRIVATE cdr)

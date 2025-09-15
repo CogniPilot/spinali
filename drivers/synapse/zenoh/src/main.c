@@ -18,6 +18,9 @@
 #include <pb_encode.h>
 
 #include <synapse_topic_list.h>
+#include <dds_serializer.h>
+
+#define CDR_SAFETY_MARGIN 12
 
 #define MY_STACK_SIZE 8192
 #define MY_PRIORITY   1
