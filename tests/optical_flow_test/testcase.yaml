@@ -1,6 +1,19 @@
-
+common:
+  tags:
+    - mr_mcxn_t1
+  platform_allow: mr_mcxn_t1/mcxn947/cpu0
 tests:
-  optical_flow_test:
-    platform_allow: mr_mcxn_t1
-    tags: optical
+  spinali.mr_mcxn_t1:
+    # platform_allow: mr_mcxn_t1/mcxn947/cpu0
+    # platform_allow: frdm_mcxn947/mcxn947/cpu0
+    # tags: mr_mcxn_t1
+    build_only: false
+
+  spinali.mr_mcxn_t1.oflo:
+    # platform_allow: mr_mcxn_t1/mcxn947/cpu0
+    tags: 
+      # - mr_mcxn_t1 
+      - oflo
+    extra_configs: 
+      - CONFIG_OFLO_ADDON=y
     build_only: false
