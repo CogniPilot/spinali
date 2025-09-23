@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set(CYCLONEDDS_PATH ${CMAKE_SOURCE_DIR}/../../../modules/lib/cyclonedds)
-set(SYNAPSE_MSGS_PATH ${CMAKE_SOURCE_DIR}/../../../modules/lib/synapse_msgs)
+set(SYNAPSE_MSGS_PATH ${CMAKE_SOURCE_DIR}/../../../modules/lib/synapse_msgs_idl)
 
 # CycloneDDS CDR serializer
 include(${CYCLONEDDS_PATH}/src/core/cdr/CMakeLists.txt)
+target_compile_options(cdr PRIVATE ${ZEPHYR_CFLAGS})
+target_link_libraries(cdr PUBLIC zephyr_interface)
 
 target_compile_options(cdr PUBLIC
             -Wno-cast-align
@@ -34,24 +36,36 @@ execute_process(COMMAND ${CMAKE_COMMAND} --build . --target idlc
 list(APPEND CMAKE_PROGRAM_PATH "${CMAKE_CURRENT_BINARY_DIR}/idlc/bin")
 
 # Generate code for msgs
-file(GLOB idl_list "${SYNAPSE_MSGS_PATH}/rosidl/*.idl")
+file(GLOB_RECURSE idl_list "${SYNAPSE_MSGS_PATH}/*.idl")
 set(IDLC_GENERATE_DIR ${CMAKE_CURRENT_BINARY_DIR}/idlc_generate)
-
-# Copy .idl files
-set(cdr_idl)
-foreach(idl_file ${idl_list})
-	get_filename_component(msg ${idl_file} NAME_WE)
-  configure_file(${idl_file} ${IDLC_GENERATE_DIR}/synapse_msgs/msg/${msg}.idl COPYONLY)
-	list(APPEND cdr_idl ${IDLC_GENERATE_DIR}/synapse_msgs/msg/${msg}.idl)
-endforeach()
 
 # Generate C definitions from IDL
 include("${CYCLONEDDS_PATH}/cmake/Modules/Generate.cmake")
 idlc_generate(TARGET msgs_cdrstream
                 FEATURES "cdrstream-desc"
-                FILES ${cdr_idl}
-                INCLUDES ${IDLC_GENERATE_DIR}
-                BASE_DIR ${IDLC_GENERATE_DIR}
+                FILES ${idl_list}
+                INCLUDES ${SYNAPSE_MSGS_PATH}
+                BASE_DIR ${SYNAPSE_MSGS_PATH}
                 WARNINGS no-implicit-extensibility)
                 
+target_include_directories(cdr INTERFACE ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(cdr PRIVATE msgs_cdrstream)
 add_dependencies(cdr msgs_cdrstream)
+
+# Custom command to generate combined files
+add_custom_command(
+    OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/synapse_msgs.c ${CMAKE_CURRENT_BINARY_DIR}/synapse_msgs.h
+    COMMAND ${CMAKE_COMMAND} -E echo "Generating synapse_msgs_idl core..."
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/synapse_msgs.py ${SYNAPSE_MSGS_PATH} ${CMAKE_CURRENT_BINARY_DIR}
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/synapse_msgs.py ${SYNAPSE_MSGS_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/synapse_msgs.c.em ${CMAKE_CURRENT_SOURCE_DIR}/synapse_msgs.h.em
+    COMMENT "Running Empy code generation for combined output"
+)
+
+# Add a library that uses the generated source
+add_library(synapse_msgs_lib
+    ${CMAKE_CURRENT_BINARY_DIR}/synapse_msgs.c
+)
+
+target_include_directories(synapse_msgs_lib PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(synapse_msgs_lib PRIVATE cdr )
+add_dependencies(synapse_msgs_lib cdr)

@@ -14,4 +14,4 @@ zephyr_library_sources(
 add_dependencies(spinali_synapse_zenoh synapse_pb)
 add_dependencies(spinali_synapse_zenoh cdr)
 
-target_link_libraries(spinali_synapse_zenoh PRIVATE cdr)
+target_link_libraries(spinali_synapse_zenoh PRIVATE synapse_msgs_lib cdr )

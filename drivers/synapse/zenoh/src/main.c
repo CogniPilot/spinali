@@ -20,6 +20,8 @@
 #include <synapse_topic_list.h>
 #include <dds_serializer.h>
 
+#include <synapse_msgs.h>
+
 #define CDR_SAFETY_MARGIN 12
 
 #define MY_STACK_SIZE 8192
@@ -30,7 +32,7 @@
 #define NET_LOCATOR_SIZE 64
 #define KEYEXPR_RIHS01_SIZE                                                                        \
 	sizeof("RIHS01_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-#define KEYEXPR_MSG_NAME      "std_msgs::msg::dds_::"
+#define KEYEXPR_MSG_NAME      "synapse_msgs::msg::dds_::"
 #define KEYEXPR_MSG_NAME_SIZE sizeof(KEYEXPR_MSG_NAME)
 #define TOPIC_INFO_SIZE       (96)
 #define MAX_LINE_SIZE         (2 * TOPIC_INFO_SIZE)
@@ -44,9 +46,6 @@
 /* See rmw_zenoh design.md for more information
  * https://github.com/ros2/rmw_zenoh/blob/rolling/docs/design.md#publishers */
 #define RMW_ATTACHEMENT_SIZE (8u + 8u + 1u + RMW_GID_STORAGE_SIZE)
-
-// CDR Xtypes header {0x00, 0x01} indicates it's Little Endian (CDR_LE representation)
-const uint8_t ros2_header[4] = {0x00, 0x01, 0x00, 0x00};
 
 typedef struct __attribute__((__packed__)) RmwAttachment {
 	int64_t sequence_number;
@@ -75,8 +74,6 @@ struct context {
 	synapse_pb_Imu imu;
 	// connections
 	z_owned_session_t s;
-	// TODO make list a
-	z_owned_publisher_t pub;
 	// status
 	struct k_sem running;
 	size_t stack_size;
@@ -94,52 +91,81 @@ static struct context g_ctx = {
 	.thread_data = {},
 };
 
-static void send_frame(struct context *ctx, pb_size_t which_msg)
+struct synapse_zenoh_publisher;
+
+typedef void (*synapse_pub_conv_cb_t)(struct synapse_zenoh_publisher *zp, struct context *ctx,
+				      pb_size_t which_msg);
+
+typedef struct synapse_zenoh_publisher {
+	const char *topic_name;
+	synapse_msg *msg_type;
+	const pb_size_t pb_tag;
+	synapse_pub_conv_cb_t callback;
+	z_owned_publisher_t pub;
+} synapse_zenoh_publisher;
+
+void imu_convert_and_publish(synapse_zenoh_publisher *zp, struct context *ctx, pb_size_t which_msg)
 {
 	synapse_pb_Frame *frame = &ctx->tx_frame;
-	frame->which_msg = which_msg;
-	if (which_msg == synapse_pb_Frame_imu_tag) {
-		frame->msg.imu = ctx->imu;
-	} else if (which_msg == synapse_pb_Frame_clock_offset_tag) {
-		int64_t ticks = k_uptime_ticks();
-		int64_t sec = ticks / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
-		int32_t nanosec = (ticks - sec * CONFIG_SYS_CLOCK_TICKS_PER_SEC) * 1e9 /
-				  CONFIG_SYS_CLOCK_TICKS_PER_SEC;
-		frame->msg.clock_offset.has_stamp = false;
-		frame->msg.clock_offset.has_offset = true;
-		frame->msg.clock_offset.offset.seconds = sec;
-		frame->msg.clock_offset.offset.nanos = nanosec;
-	}
-	static uint8_t tx_buf[TX_BUF_SIZE];
-	pb_ostream_t stream = pb_ostream_from_buffer(tx_buf, sizeof(tx_buf));
-	if (!pb_encode_ex(&stream, synapse_pb_Frame_fields, frame, PB_ENCODE_DELIMITED)) {
-		LOG_ERR("encoding failed: %s", PB_GET_ERROR(&stream));
-	} else {
-		uint8_t buf[sizeof(ros2_header) + 4];
-		memcpy(buf, ros2_header, sizeof(ros2_header));
-		int32_t value = (int32_t)_attachment.sequence_number;
-		memcpy(buf + 4, &value, 4);
+	synapse_msgs_msg_Imu imu_data;
+	uint8_t buf[sizeof(ros2_header) + sizeof(synapse_msgs_msg_Imu) + CDR_SAFETY_MARGIN];
 
-		// udp_tx_send(&ctx->udp, tx_buf, stream.bytes_written);
-		LOG_ERR("TODO SEND Zenoh size %d", stream.bytes_written);
-		// TODO Zenoh
+	memcpy(buf, ros2_header, sizeof(ros2_header));
 
-		z_publisher_put_options_t options;
-		z_publisher_put_options_default(&options);
+	strcpy(imu_data.header.frame_id, frame->msg.imu.frame_id);
+	int64_t ticks = k_uptime_ticks();
+	imu_data.header.stamp.sec = ticks / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+	imu_data.header.stamp.nanosec =
+		(ticks - imu_data.header.stamp.sec * CONFIG_SYS_CLOCK_TICKS_PER_SEC) * 1e9 /
+		CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+	imu_data.x = frame->msg.imu.orientation.x;
+	imu_data.y = frame->msg.imu.orientation.y;
+	imu_data.z = frame->msg.imu.orientation.z;
 
-		_attachment.sequence_number++;
-		_attachment.time = 0; // FIXME
+	// THIS CODE NEEDS AN HELPER
 
-		z_owned_bytes_t z_attachment;
-		z_bytes_from_static_buf(&z_attachment, (const uint8_t *)&_attachment,
-					RMW_ATTACHEMENT_SIZE);
+	dds_ostream_t os;
+	os.m_buffer = &buf[4];
+	os.m_index = 0;
+	os.m_size =
+		(uint32_t)sizeof(ros2_header) + sizeof(synapse_msgs_msg_Imu) + CDR_SAFETY_MARGIN;
+	os.m_xcdr_version = DDSI_RTPS_CDR_ENC_VERSION_1;
 
-		options.attachment = z_move(z_attachment);
+	z_publisher_put_options_t options;
+	z_publisher_put_options_default(&options);
 
+	_attachment.sequence_number++;
+	_attachment.time = 0; // FIXME
+
+	z_owned_bytes_t z_attachment;
+	z_bytes_from_static_buf(&z_attachment, (const uint8_t *)&_attachment, RMW_ATTACHEMENT_SIZE);
+
+	options.attachment = z_move(z_attachment);
+
+	if (dds_stream_write(&os, &dds_allocator, (const char *)&imu_data,
+			     synapse_msgs_msg_imu.desc->ops.ops)) {
 		z_owned_bytes_t payload;
-		z_bytes_copy_from_buf(&payload, &buf, 8);
-		z_publisher_put(z_loan(ctx->pub), z_move(payload), &options);
+		z_bytes_copy_from_buf(&payload, buf, os.m_size);
+		z_publisher_put(z_loan(zp->pub), z_move(payload), &options);
 	}
+}
+
+synapse_zenoh_publisher publishers[] = {
+	{"/imu", &synapse_msgs_msg_imu, synapse_pb_Frame_imu_tag, imu_convert_and_publish},
+};
+
+#define NUM_PUBLISHERS (sizeof(publishers) / sizeof(publishers[0]))
+
+static void send_frame(struct context *ctx, pb_size_t which_msg)
+{
+	for (int i = 0; i < NUM_PUBLISHERS; i++) {
+		if (publishers[i].pb_tag == which_msg) {
+			publishers[i].callback(&publishers[i], ctx, which_msg);
+		}
+	}
+
+	// CHEAT
+	publishers[0].callback(&publishers[0], ctx, which_msg);
 }
 
 static int generate_rmw_zenoh_node_liveliness_keyexpr(const z_id_t *id, char *keyexpr)
@@ -161,7 +187,7 @@ int generate_rmw_zenoh_topic_keyexpr(const char *topic, const uint8_t *rihs_hash
 				     char *type_camel_case, char *keyexpr)
 {
 	return snprintf(keyexpr, KEYEXPR_SIZE,
-			"%" PRId32 "%s/" KEYEXPR_MSG_NAME "%s_/RIHS01_"
+			"%" PRId32 "%s/%s_/RIHS01_"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
@@ -200,7 +226,7 @@ int generate_rmw_zenoh_topic_liveliness_keyexpr(const z_id_t *id, const char *to
 			"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/"
 			"0/11/%s/%%/%%/"
 			"spinali_%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x/"
-			"%s/" KEYEXPR_MSG_NAME "%s_/RIHS01_"
+			"%s/%s_/RIHS01_"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
 			"%02x%02x%02x%02x%02x%02x%02x%02x"
@@ -244,41 +270,38 @@ static int zenoh_liveliness_init(struct context *ctx)
 		}
 	}
 
-	// TODO move this part to the actual publisher/subscriber
+	for (int i = 0; i < NUM_PUBLISHERS; i++) {
+		z_view_keyexpr_t ke;
+		synapse_zenoh_publisher *pub = &publishers[i];
 
-	// RIHS01_b6578ded3c58c626cfe8d1a6fb6e04f706f97e9f03d2727c9ff4e74b1cef0deb
-	const uint8_t rihs[32] = {0xb6, 0x57, 0x8d, 0xed, 0x3c, 0x58, 0xc6, 0x26, 0xcf, 0xe8, 0xd1,
-				  0xa6, 0xfb, 0x6e, 0x04, 0xf7, 0x06, 0xf9, 0x7e, 0x9f, 0x03, 0xd2,
-				  0x72, 0x7c, 0x9f, 0xf4, 0xe7, 0x4b, 0x1c, 0xef, 0x0d, 0xeb};
+		generate_rmw_zenoh_topic_liveliness_keyexpr(&self_id, pub->topic_name,
+							    pub->msg_type->rihs_hash,
+							    pub->msg_type->msg_name, keyexpr, "MP");
 
-	generate_rmw_zenoh_topic_liveliness_keyexpr(&self_id, "/hello_world", rihs, "Int32",
-						    keyexpr, "MP");
+		if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
+			LOG_ERR("%s is not a valid key expression\n", keyexpr);
+			return -1;
+		}
 
-	z_view_keyexpr_t ke;
+		z_owned_liveliness_token_t token;
 
-	if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
-		LOG_ERR("%s is not a valid key expression\n", keyexpr);
-		return -1;
-	}
+		if (z_liveliness_declare_token(z_loan(ctx->s), &token, z_loan(ke), NULL) < 0) {
+			LOG_ERR("Unable to create liveliness token!\n");
+			return -1;
+		}
 
-	z_owned_liveliness_token_t token;
+		generate_rmw_zenoh_topic_keyexpr(pub->topic_name, pub->msg_type->rihs_hash,
+						 pub->msg_type->msg_name, keyexpr);
 
-	if (z_liveliness_declare_token(z_loan(ctx->s), &token, z_loan(ke), NULL) < 0) {
-		LOG_ERR("Unable to create liveliness token!\n");
-		return -1;
-	}
+		if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
+			LOG_ERR("%s is not a valid key expression", keyexpr);
+			return -1;
+		}
 
-	// Dummy publisher test
-	generate_rmw_zenoh_topic_keyexpr("/hello_world", rihs, "Int32", keyexpr);
-
-	if (z_view_keyexpr_from_str(&ke, keyexpr) < 0) {
-		LOG_ERR("%s is not a valid key expression", keyexpr);
-		return -1;
-	}
-
-	if (z_declare_publisher(z_loan(ctx->s), &ctx->pub, z_loan(ke), NULL) < 0) {
-		LOG_ERR("Unable to declare publisher for key expression!");
-		return -1;
+		if (z_declare_publisher(z_loan(ctx->s), &pub->pub, z_loan(ke), NULL) < 0) {
+			LOG_ERR("Unable to declare publisher for key expression!");
+			return -1;
+		}
 	}
 
 	return 0;
