@@ -14,6 +14,8 @@ ZTEST_DMEM const struct device *const dev_bmm350        = DEVICE_DT_GET(DT_NODEL
 ZTEST_DMEM const struct device *const dev_apa102        = DEVICE_DT_GET(DT_NODELABEL(led_strip));
 
 ZTEST_DMEM const struct device *const dev_canbus        = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
+ZTEST_DMEM const struct device *const dev_phy           = DEVICE_DT_GET(DT_NODELABEL(phy));
+ZTEST_DMEM const struct device *const dev_mac           = DEVICE_DT_GET(DT_NODELABEL(enet_mac));
 // ZTEST_DMEM const struct device *const dev_can1          = DEVICE_DT_GET(DT_NOTELABEL(can_phy1));
 
 // ZTEST_DMEM const struct device *const dev_enet          = DEVICE_DT_GET(DT_CHOSEN(phy));
@@ -141,12 +143,16 @@ ZTEST(canbus, test_can_rdy)
     zassert_true(device_is_ready(dev_canbus), "Device was not ready");
 }
 
-
-
 ZTEST_SUITE(canbus, NULL, NULL, NULL, NULL, NULL);
 
 // ENET
+ZTEST(enet, test_enet_rdy)
+{
+    zassert_true(device_is_ready(dev_mac), "Device was not ready");
+    zassert_true(device_is_ready(dev_phy), "Device was not ready");
+}
 
+ZTEST_SUITE(enet, NULL, NULL, NULL, NULL, NULL);
 
 // Led strip
 ZTEST(apa102, test_led_rdy)

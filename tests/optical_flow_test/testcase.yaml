@@ -7,6 +7,8 @@ tests:
     # platform_allow: mr_mcxn_t1/mcxn947/cpu0
     # platform_allow: frdm_mcxn947/mcxn947/cpu0
     # tags: mr_mcxn_t1
+    depends_on: can
+    filter: CONFIG_ICM4268X and CONFIG_ICM45686
     build_only: false
 
   spinali.mr_mcxn_t1.oflo:
