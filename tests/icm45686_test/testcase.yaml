@@ -1,0 +1,22 @@
+common:
+  tags:
+    - drivers
+    - sensor
+  platform_allow: mr_mcxn_t1/mcxn947/cpu0
+tests:
+  drivers.sensor.icm45686:
+    # platform_allow: mr_mcxn_t1/mcxn947/cpu0
+    # platform_allow: frdm_mcxn947/mcxn947/cpu0
+    # tags: mr_mcxn_t1
+    filter: CONFIG_ICM45686
+    build_only: false
+
+  drivers.sensor.icm45686.oflo:
+    # platform_allow: mr_mcxn_t1/mcxn947/cpu0
+    tags: 
+      # - mr_mcxn_t1 
+      - oflo
+    extra_args: DTC_OVERLAY_FILE=mr_mcxn_t1_oflo.overlay
+    extra_configs: 
+      - CONFIG_OFLO_ADDON=y
+    build_only: false
