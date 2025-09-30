@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright 2025 CogniPilot Foundation */
+
+&i3c0 {
+	status = "okay"; /* Locks-up on startup with busy wait */
+};
+
+&bmp581_0 {
+	status = "okay"; /* Locks-up on startup with busy wait */
+};

@@ -1,0 +1,8 @@
+common:
+  tags:
+    - drivers
+    - sensor
+tests:
+  drivers.sensor.paa3905:
+    filter: CONFIG_PAA3905
+    build_only: false

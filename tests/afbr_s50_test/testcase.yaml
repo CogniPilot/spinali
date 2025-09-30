@@ -1,0 +1,8 @@
+common:
+  tags:
+    - drivers
+    - sensor
+tests:
+  drivers.sensor.afbr_s50:
+    filter: CONFIG_AFBR_S50
+    build_only: false

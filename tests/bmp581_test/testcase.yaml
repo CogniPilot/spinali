@@ -1,0 +1,8 @@
+common:
+  tags:
+    - drivers
+    - sensor
+tests:
+  drivers.sensor.bmp581:
+    filter: CONFIG_BMP581
+    build_only: false

@@ -1,0 +1,8 @@
+common:
+  tags:
+    - drivers
+    - sensor
+tests:
+  drivers.sensor.bmm350:
+    filter: CONFIG_BMM350
+    build_only: false
