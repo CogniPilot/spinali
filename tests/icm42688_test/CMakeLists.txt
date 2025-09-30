@@ -11,7 +11,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 #Give the project a name
 project(
-  icm45686_test
+  icm42688_test
   VERSION 1.0
   DESCRIPTION "ICM45686 test code"
   LANGUAGES C
