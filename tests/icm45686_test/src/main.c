@@ -4,7 +4,6 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/ztest.h>
-#include <stdio.h>
 
 #define ICM45686_COMPAT invensense_icm45686
 
@@ -48,6 +47,7 @@ static void test_icm45686_data(const struct device *dev)
                die_temp[0].val1, die_temp[0].val2);
 }
 
+// Macro that allows test suites with tests to be created for each ICM45686 device within a board
 #define ICM45686_DEVICE_INIT(n) \
     const struct device *dev_##n = DEVICE_DT_GET(n); \
     ZTEST(icm45686_##n, test_icm45686_rdy) { test_icm45686_rdy(dev_##n); } \
