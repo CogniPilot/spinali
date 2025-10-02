@@ -8,3 +8,8 @@
 		gyro0 = &icm42688;
 	};
 };
+
+/** Requires enabling I3C. Disabling altogether for now */
+&bmm350_0 {
+	status = "disabled";
+};

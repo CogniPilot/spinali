@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: rebase-mr-mcxn-t1
+      revision: b601da7c8021e6aba7a9b04c5c28dfa01edc51cd # main-with-patches 11/25/25
       import:
         - name-allowlist:
           - nanopb
@@ -34,17 +34,25 @@ manifest:
           - mcuboot
     - name: zros
       remote: cognipilot
-      revision: 843348bca3a15e914914b90057369b9616302e20 # main 6/11/25
+      revision: 843348bca3a15e914914b90057369b9616302e20 # main 10/27/25
       path: modules/lib/zros
     - name: cyecca
       remote: cognipilot
-      revision: 0acc0882eee8ab146371eca71bcb30157b76b250 # main 6/11/25
+      revision: 64d1f0dc5127d85765909f0c3525cc38305dac19 # main 11/17/25
       path: modules/lib/cyecca
     - name: synapse_pb
       remote: cognipilot
-      revision: be99b693c321e3c97e785fe447e056792d89fe34 # main 8/22/24
+      revision: f038dd178faac0481033e5e4c757e31777c1b0be # main 11/10/25
       path: modules/lib/synapse_pb
     - name: hal_nxp
       remote: cognipilot
-      revision: 10f1faf465440e48ecad1ab2b5adee8c72f41157
+      revision: cf8f1631e862528ee044850bcc70273975b90771 # master 10/27/25
       path: modules/hal/nxp
+    - name: zros_drivers
+      remote: cognipilot
+      revision: c64516525e4b68486e789b7debde651b18b859f2 # main 11/23/25
+      path: modules/lib/zros_drivers
+    - name: zephyr_boards
+      remote: cognipilot
+      revision: 2425c18c60ef65e9caa3e2120fd28b9c34a4112d # bsp-add-mr-mcxn-t1
+      path: modules/lib/zephyr_boards
