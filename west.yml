@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: rebase-mr-mcxn-t1
+      revision: hardware_test
       import:
         - name-allowlist:
           - nanopb
