@@ -9,6 +9,8 @@
 /// @param dev Device struct
 static void test_bmp581_rdy(const struct device *dev)
 {
+    ztest_test_skip();  //Skip test because hardware is currently faulty
+
     printk("Running test for device: %s\n", dev->name);
     zassert_true(device_is_ready(dev), "Device is not ready");
 }
@@ -17,6 +19,8 @@ static void test_bmp581_rdy(const struct device *dev)
 /// @param dev Device struct
 static void test_bmp581_data(const struct device *dev)
 {
+    ztest_test_skip();  //Skip test because hardware is currently faulty
+
     struct sensor_value baro_press[1], baro_temp[1];
     int err;
 
