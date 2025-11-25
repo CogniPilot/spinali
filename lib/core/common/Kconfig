@@ -3,6 +3,7 @@
 menuconfig SPINALI_CORE_COMMON
   bool "Enable core common"
   default y
+  select ZROS_PERF
   help
      This option enables the core common library
 
