@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: b601da7c8021e6aba7a9b04c5c28dfa01edc51cd # main-with-patches 11/25/25
+      revision: 6be6074a3a6981fc4dcb984d97fa6148d1fff2b0 # main-with-patches 11/25/25
       import:
         - name-allowlist:
           - nanopb
@@ -50,7 +50,7 @@ manifest:
       path: modules/hal/nxp
     - name: zros_drivers
       remote: cognipilot
-      revision: c28d121a43fe097cef1460d1510d173451aa2ef4 # main 11/25/25
+      revision: 14cb72ac76d085ffd51ce858055ab3e285ab46d6 # imu-stream-multi-instance-support
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot

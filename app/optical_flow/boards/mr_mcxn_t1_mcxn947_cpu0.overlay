@@ -4,12 +4,36 @@
 / {
 
 	aliases {
-		accel0 = &icm42688;
-		gyro0 = &icm42688;
+		imu-stream-0 = &icm42688;
+		imu-stream-1 = &icm45686_0;
+		imu-stream-2 = &icm45686_1;
 	};
 };
 
 /** Requires enabling I3C. Disabling altogether for now */
 &bmm350_0 {
 	status = "disabled";
+};
+
+#include <zephyr/dt-bindings/sensor/icm42688.h>
+
+&icm42688 {
+	accel-odr = <ICM42688_DT_ACCEL_ODR_8000>;
+	gyro-odr = <ICM42688_DT_GYRO_ODR_8000>;
+};
+
+#include <zephyr/dt-bindings/sensor/icm45686.h>
+
+&icm45686_0 {
+	/* Configure to output 4-samples every 1.25-ms (800-Hz) */
+	accel-odr = <ICM45686_DT_ACCEL_ODR_3200>;
+	gyro-odr = <ICM45686_DT_GYRO_ODR_3200>;
+	fifo-watermark = <4>;
+};
+
+&icm45686_1 {
+	/* Configure to output 8-samples every 2.50-ms (400-Hz) */
+	accel-odr = <ICM45686_DT_ACCEL_ODR_3200>;
+	gyro-odr = <ICM45686_DT_GYRO_ODR_3200>;
+	fifo-watermark = <8>;
 };

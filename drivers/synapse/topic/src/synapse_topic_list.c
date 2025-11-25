@@ -192,6 +192,9 @@ ZROS_TOPIC_DEFINE(cmd_vel, synapse_pb_Twist);
 ZROS_TOPIC_DEFINE(cmd_vel_ethernet, synapse_pb_Twist);
 ZROS_TOPIC_DEFINE(force_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DEFINE(imu, synapse_pb_Imu);
+ZROS_TOPIC_DEFINE(imu0, synapse_pb_Imu);
+ZROS_TOPIC_DEFINE(imu1, synapse_pb_Imu);
+ZROS_TOPIC_DEFINE(imu2, synapse_pb_Imu);
 ZROS_TOPIC_DEFINE(imu_q31_array, synapse_pb_ImuQ31Array);
 ZROS_TOPIC_DEFINE(input, synapse_pb_Input);
 ZROS_TOPIC_DEFINE(input_ethernet, synapse_pb_Input);
@@ -226,6 +229,9 @@ static struct zros_topic *topic_list[] = {
 	&topic_cmd_vel,
 	&topic_cmd_vel_ethernet,
 	&topic_imu,
+	&topic_imu0,
+	&topic_imu1,
+	&topic_imu2,
 	&topic_imu_q31_array,
 	&topic_input,
 	&topic_input_ethernet,
