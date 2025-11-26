@@ -7,12 +7,12 @@
 		imu-stream-0 = &icm42688;
 		imu-stream-1 = &icm45686_0;
 		imu-stream-2 = &icm45686_1;
+		mag-stream-0 = &bmm350_0;
 	};
 };
 
-/** Requires enabling I3C. Disabling altogether for now */
 &bmm350_0 {
-	status = "disabled";
+	odr = "100";
 };
 
 #include <zephyr/dt-bindings/sensor/icm42688.h>
