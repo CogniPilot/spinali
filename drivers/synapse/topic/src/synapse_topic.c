@@ -64,9 +64,9 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 		(clock_offset_ethernet, &topic_clock_offset_ethernet, "clock_offset_ethernet"),    \
 		(cmd_vel, &topic_cmd_vel, "cmd_vel"),                                              \
 		(cmd_vel_ethernet, &topic_cmd_vel_ethernet, "cmd_vel_ethernet"),                   \
-		(force_sp, &topic_force_sp, "force_sp"), (imu, &topic_imu, "imu"),                 \
-		(imu0, &topic_imu0, "imu0"), (imu1, &topic_imu1, "imu1"),                          \
-		(imu2, &topic_imu2, "imu2"),                                                       \
+		(distance, &topic_distance, "distance"), (force_sp, &topic_force_sp, "force_sp"),  \
+		(imu, &topic_imu, "imu"), (imu0, &topic_imu0, "imu0"),                             \
+		(imu1, &topic_imu1, "imu1"), (imu2, &topic_imu2, "imu2"),                          \
 		(imu_q31_array, &topic_imu_q31_array, "imu_q31_array"),                            \
 		(input, &topic_input, "input"),                                                    \
 		(input_ethernet, &topic_input_ethernet, "input_ethernet"),                         \
@@ -273,6 +273,9 @@ void topic_work_handler(struct k_work *work)
 	} else if (topic == &topic_status) {
 		synapse_pb_Status msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_status);
+	} else if (topic == &topic_distance) {
+		synapse_pb_Distance msg = {};
+		handler(sh, topic, &msg, (snprint_t *)&snprint_distance);
 	} else if (topic == &topic_imu || topic == &topic_imu0 || topic == &topic_imu1 ||
 		   topic == &topic_imu2) {
 		synapse_pb_Imu msg = {};

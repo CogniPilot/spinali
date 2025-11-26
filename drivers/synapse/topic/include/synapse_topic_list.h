@@ -12,6 +12,7 @@
 #include <synapse_pb/battery_state.pb.h>
 #include <synapse_pb/bezier_trajectory.pb.h>
 #include <synapse_pb/frame.pb.h>
+#include <synapse_pb/distance.pb.h>
 #include <synapse_pb/imu.pb.h>
 #include <synapse_pb/input.pb.h>
 #include <synapse_pb/led_array.pb.h>
@@ -55,6 +56,7 @@ ZROS_TOPIC_DECLARE(topic_bezier_trajectory_ethernet, synapse_pb_BezierTrajectory
 ZROS_TOPIC_DECLARE(topic_clock_offset_ethernet, synapse_pb_Time);
 ZROS_TOPIC_DECLARE(topic_cmd_vel, synapse_pb_Twist);
 ZROS_TOPIC_DECLARE(topic_cmd_vel_ethernet, synapse_pb_Twist);
+ZROS_TOPIC_DECLARE(topic_distance, synapse_pb_Distance);
 ZROS_TOPIC_DECLARE(topic_force_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DECLARE(topic_imu, synapse_pb_Imu);
 ZROS_TOPIC_DECLARE(topic_imu0, synapse_pb_Imu);
