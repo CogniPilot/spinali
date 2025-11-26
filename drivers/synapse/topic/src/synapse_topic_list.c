@@ -190,6 +190,7 @@ ZROS_TOPIC_DEFINE(bezier_trajectory_ethernet, synapse_pb_BezierTrajectory);
 ZROS_TOPIC_DEFINE(clock_offset_ethernet, synapse_pb_ClockOffset);
 ZROS_TOPIC_DEFINE(cmd_vel, synapse_pb_Twist);
 ZROS_TOPIC_DEFINE(cmd_vel_ethernet, synapse_pb_Twist);
+ZROS_TOPIC_DEFINE(distance, synapse_pb_Distance);
 ZROS_TOPIC_DEFINE(force_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DEFINE(imu, synapse_pb_Imu);
 ZROS_TOPIC_DEFINE(imu0, synapse_pb_Imu);
@@ -229,6 +230,7 @@ static struct zros_topic *topic_list[] = {
 	&topic_clock_offset_ethernet,
 	&topic_cmd_vel,
 	&topic_cmd_vel_ethernet,
+	&topic_distance,
 	&topic_imu,
 	&topic_imu0,
 	&topic_imu1,

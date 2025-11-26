@@ -144,6 +144,11 @@ int snprint_bezier_trajectory(char *buf, size_t n, synapse_pb_BezierTrajectory *
 	return offset;
 }
 
+int snprint_distance(char *buf, size_t n, synapse_pb_Distance *m)
+{
+	return snprintf_cat(buf, n, "distance: %10.4f m\n", m->distance);
+}
+
 int snprint_status(char *buf, size_t n, synapse_pb_Status *m)
 {
 	size_t offset = 0;
