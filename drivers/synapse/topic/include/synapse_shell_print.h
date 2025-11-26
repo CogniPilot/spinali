@@ -14,10 +14,10 @@ typedef int snprint_t(char *buf, size_t n, void *msg);
 
 int snprint_actuators(char *buf, size_t n, synapse_pb_Actuators *m);
 int snprint_altimeter(char *buf, size_t n, synapse_pb_Altimeter *m);
+int snprint_argus(char *buf, size_t n, synapse_pb_ArgusResults *m);
 int snprint_battery_state(char *buf, size_t n, synapse_pb_BatteryState *m);
 int snprint_bezier_curve(char *buf, size_t n, synapse_pb_BezierTrajectory_Curve *m);
 int snprint_bezier_trajectory(char *buf, size_t n, synapse_pb_BezierTrajectory *m);
-int snprint_distance(char *buf, size_t n, synapse_pb_Distance *m);
 int snprint_clock_offset(char *buf, size_t n, synapse_pb_ClockOffset *m);
 int snprint_imu(char *buf, size_t n, synapse_pb_Imu *m);
 int snprint_imu_q31_array(char *buf, size_t n, synapse_pb_ImuQ31Array *m);
