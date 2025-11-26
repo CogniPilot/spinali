@@ -9,6 +9,7 @@
 		imu-stream-2 = &icm45686_1;
 		mag-stream-0 = &bmm350_0;
 		optical-flow-stream-0 = &paa3905;
+		argus-stream-0 = &afbr_s50;
 	};
 };
 
@@ -19,8 +20,8 @@
 #include <zephyr/dt-bindings/sensor/icm42688.h>
 
 &icm42688 {
-	accel-odr = <ICM42688_DT_ACCEL_ODR_8000>;
-	gyro-odr = <ICM42688_DT_GYRO_ODR_8000>;
+	accel-odr = <ICM42688_DT_ACCEL_ODR_4000>;
+	gyro-odr = <ICM42688_DT_GYRO_ODR_4000>;
 };
 
 #include <zephyr/dt-bindings/sensor/icm45686.h>
@@ -30,6 +31,7 @@
 	accel-odr = <ICM45686_DT_ACCEL_ODR_3200>;
 	gyro-odr = <ICM45686_DT_GYRO_ODR_3200>;
 	fifo-watermark = <4>;
+	fifo-watermark-equals;
 };
 
 &icm45686_1 {
@@ -37,4 +39,9 @@
 	accel-odr = <ICM45686_DT_ACCEL_ODR_3200>;
 	gyro-odr = <ICM45686_DT_GYRO_ODR_3200>;
 	fifo-watermark = <8>;
+	fifo-watermark-equals;
+};
+
+&afbr_s50 {
+	odr = <100>;
 };

@@ -56,6 +56,7 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 		(altimeter, &topic_altimeter, "altimeter"),                                        \
 		(angular_velocity_ff, &topic_angular_velocity_ff, "angular_velocity_ff"),          \
 		(angular_velocity_sp, &topic_angular_velocity_sp, "angular_velocity_sp"),          \
+		(argus, &topic_argus, "argus"),                                                    \
 		(attitude_sp, &topic_attitude_sp, "attitude_sp"),                                  \
 		(battery_state, &topic_battery_state, "battery_state"),                            \
 		(bezier_trajectory, &topic_bezier_trajectory, "bezier_trajectory"),                \
@@ -64,7 +65,7 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 		(clock_offset_ethernet, &topic_clock_offset_ethernet, "clock_offset_ethernet"),    \
 		(cmd_vel, &topic_cmd_vel, "cmd_vel"),                                              \
 		(cmd_vel_ethernet, &topic_cmd_vel_ethernet, "cmd_vel_ethernet"),                   \
-		(distance, &topic_distance, "distance"), (force_sp, &topic_force_sp, "force_sp"),  \
+		(force_sp, &topic_force_sp, "force_sp"),                                           \
 		(imu, &topic_imu, "imu"), (imu0, &topic_imu0, "imu0"),                             \
 		(imu1, &topic_imu1, "imu1"), (imu2, &topic_imu2, "imu2"),                          \
 		(imu_q31_array, &topic_imu_q31_array, "imu_q31_array"),                            \
@@ -254,6 +255,9 @@ void topic_work_handler(struct k_work *work)
 		   topic == &topic_angular_velocity_ff) {
 		synapse_pb_Vector3 msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_vector3);
+	} else if (topic == &topic_argus) {
+		synapse_pb_ArgusResults msg = {};
+		handler(sh, topic, &msg, (snprint_t *)&snprint_argus);
 	} else if (topic == &topic_attitude_sp || topic == &topic_orientation_sp) {
 		synapse_pb_Quaternion msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_quaternion);
@@ -273,9 +277,6 @@ void topic_work_handler(struct k_work *work)
 	} else if (topic == &topic_status) {
 		synapse_pb_Status msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_status);
-	} else if (topic == &topic_distance) {
-		synapse_pb_Distance msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_distance);
 	} else if (topic == &topic_imu || topic == &topic_imu0 || topic == &topic_imu1 ||
 		   topic == &topic_imu2) {
 		synapse_pb_Imu msg = {};

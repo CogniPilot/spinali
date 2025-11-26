@@ -70,6 +70,13 @@ int snprint_altimeter(char *buf, size_t n, synapse_pb_Altimeter *m)
 			    m->vertical_position, m->vertical_velocity, m->vertical_reference);
 }
 
+int snprint_argus(char *buf, size_t n, synapse_pb_ArgusResults *m)
+{
+	return snprintf_cat(buf, n, "stat: %d, range: %10.4f m, ampl: %10.4f LSB, qual: %d\n",
+			    m->status, (double)m->bin.range, (double)m->bin.amplitude,
+			    m->bin.signal_quality);
+}
+
 int snprint_battery_state(char *buf, size_t n, synapse_pb_BatteryState *m)
 {
 	size_t offset = 0;
@@ -142,11 +149,6 @@ int snprint_bezier_trajectory(char *buf, size_t n, synapse_pb_BezierTrajectory *
 		offset += snprint_bezier_curve(buf + offset, n - offset, &m->curves[i]);
 	}
 	return offset;
-}
-
-int snprint_distance(char *buf, size_t n, synapse_pb_Distance *m)
-{
-	return snprintf_cat(buf, n, "distance: %10.4f m\n", m->distance);
 }
 
 int snprint_status(char *buf, size_t n, synapse_pb_Status *m)
