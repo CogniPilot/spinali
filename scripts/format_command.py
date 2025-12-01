@@ -49,7 +49,7 @@ class FormatCommand(WestCommand):
         log.inf('running clang-format')
 
         # check version
-        regex = re.compile('(.*\.c$)|(.*\.cpp$)|(.*\.h$)|(.*\.hpp$)')
+        regex = re.compile(r'(.*\.c$)|(.*\.cpp$)|(.*\.h$)|(.*\.hpp$)')
         format_ok = True
 
         for path in spinali_common.source_paths:
