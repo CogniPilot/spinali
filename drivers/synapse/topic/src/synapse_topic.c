@@ -79,6 +79,7 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 		(odometry_estimator, &topic_odometry_estimator, "odometry_estimator"),             \
 		(odometry_ethernet, &topic_odometry_ethernet, "odometry_ethernet"),                \
 		(orientation_sp, &topic_orientation_sp, "orientation_sp"),                         \
+		(optical_flow_raw, &topic_optical_flow_raw, "optical_flow_raw"),                   \
 		(position_sp, &topic_position_sp, "position_sp"), (pwm, &topic_pwm, "pwm"),        \
 		(safety, &topic_safety, "safety"), (status, &topic_status, "status"),              \
 		(velocity_sp, &topic_velocity_sp, "velocity_sp"),                                  \
@@ -292,6 +293,9 @@ void topic_work_handler(struct k_work *work)
 	} else if (topic == &topic_nav_sat_fix) {
 		synapse_pb_NavSatFix msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_navsatfix);
+	} else if (topic == &topic_optical_flow_raw) {
+		synapse_pb_PixartPAA3905 msg = {};
+		handler(sh, topic, &msg, (snprint_t *)&snprint_pixart_paa3905);
 	} else if (topic == &topic_odometry_estimator || topic == &topic_odometry_ethernet) {
 		synapse_pb_Odometry msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_odometry);

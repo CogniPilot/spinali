@@ -233,6 +233,21 @@ int snprint_navsatfix(char *buf, size_t n, synapse_pb_NavSatFix *m)
 	return offset;
 }
 
+int snprint_pixart_paa3905(char *buf, size_t n, synapse_pb_PixartPAA3905 *m)
+{
+	size_t offset = 0;
+	if (m->has_stamp) {
+		offset += snprint_timestamp(buf + offset, n - offset, &m->stamp);
+	}
+	offset += snprintf_cat(buf + offset, n - offset,
+			       "motion: %d mode: %d delta_x: %d delta_y: %d delta_z: %d\n"
+			       "challenge_condition: %d squal: %d shutter: %d\n",
+			       m->motion, m->mode, m->delta_x, m->delta_y, m->delta_z,
+			       m->challenge_condition, m->squal, m->shutter);
+
+	return offset;
+}
+
 int snprint_odometry(char *buf, size_t n, synapse_pb_Odometry *m)
 {
 	size_t offset = 0;
