@@ -71,6 +71,7 @@ ZROS_TOPIC_DECLARE(topic_moment_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DECLARE(topic_nav_sat_fix, synapse_pb_NavSatFix);
 ZROS_TOPIC_DECLARE(topic_odometry_estimator, synapse_pb_Odometry);
 ZROS_TOPIC_DECLARE(topic_odometry_ethernet, synapse_pb_Odometry);
+ZROS_TOPIC_DECLARE(topic_optical_flow_raw, synapse_pb_PixartPAA3905);
 ZROS_TOPIC_DECLARE(topic_orientation_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DECLARE(topic_position_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DECLARE(topic_pwm, synapse_pb_Pwm);

@@ -206,6 +206,7 @@ ZROS_TOPIC_DEFINE(moment_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DEFINE(nav_sat_fix, synapse_pb_NavSatFix);
 ZROS_TOPIC_DEFINE(odometry_estimator, synapse_pb_Odometry);
 ZROS_TOPIC_DEFINE(odometry_ethernet, synapse_pb_Odometry);
+ZROS_TOPIC_DEFINE(optical_flow_raw, synapse_pb_PixartPAA3905);
 ZROS_TOPIC_DEFINE(orientation_sp, synapse_pb_Quaternion);
 ZROS_TOPIC_DEFINE(position_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DEFINE(pwm, synapse_pb_Pwm);
@@ -243,6 +244,7 @@ static struct zros_topic *topic_list[] = {
 	&topic_odometry_estimator,
 	&topic_odometry_ethernet,
 	&topic_orientation_sp,
+	&topic_optical_flow_raw,
 	&topic_position_sp,
 	&topic_pwm,
 	&topic_safety,

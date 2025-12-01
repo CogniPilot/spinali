@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: 6be6074a3a6981fc4dcb984d97fa6148d1fff2b0 # main-with-patches 11/25/25
+      revision: f5aaca82a6ff6952d82b012ed5d99ecc72f8e7ca # main-with-patches 12/01/25
       import:
         - name-allowlist:
           - nanopb
@@ -42,7 +42,7 @@ manifest:
       path: modules/lib/cyecca
     - name: synapse_pb
       remote: cognipilot
-      revision: f038dd178faac0481033e5e4c757e31777c1b0be # main 11/10/25
+      revision: 44ebbd1ed65ace0e9f8efcaa502f464c92faa78b # main 12/10/25
       path: modules/lib/synapse_pb
     - name: hal_nxp
       remote: cognipilot
@@ -50,7 +50,7 @@ manifest:
       path: modules/hal/nxp
     - name: zros_drivers
       remote: cognipilot
-      revision: 86ed51b9b4643892450bb6140037d1c65927ebe0
+      revision: 1f505a74139f3fe716a7957ffeb5ad2fa9b23284 # main 12/10/25
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
