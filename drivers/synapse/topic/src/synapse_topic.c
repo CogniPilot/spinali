@@ -64,7 +64,9 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 		(clock_offset_ethernet, &topic_clock_offset_ethernet, "clock_offset_ethernet"),    \
 		(cmd_vel, &topic_cmd_vel, "cmd_vel"),                                              \
 		(cmd_vel_ethernet, &topic_cmd_vel_ethernet, "cmd_vel_ethernet"),                   \
-		(force_sp, &topic_force_sp, "force_sp"), (imu, &topic_imu, "imu"),                 \
+		(distance, &topic_distance, "distance"), (force_sp, &topic_force_sp, "force_sp"),  \
+		(imu, &topic_imu, "imu"), (imu0, &topic_imu0, "imu0"),                             \
+		(imu1, &topic_imu1, "imu1"), (imu2, &topic_imu2, "imu2"),                          \
 		(imu_q31_array, &topic_imu_q31_array, "imu_q31_array"),                            \
 		(input, &topic_input, "input"),                                                    \
 		(input_ethernet, &topic_input_ethernet, "input_ethernet"),                         \
@@ -77,6 +79,7 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 		(odometry_estimator, &topic_odometry_estimator, "odometry_estimator"),             \
 		(odometry_ethernet, &topic_odometry_ethernet, "odometry_ethernet"),                \
 		(orientation_sp, &topic_orientation_sp, "orientation_sp"),                         \
+		(optical_flow, &topic_optical_flow, "optical_flow"),                               \
 		(position_sp, &topic_position_sp, "position_sp"), (pwm, &topic_pwm, "pwm"),        \
 		(safety, &topic_safety, "safety"), (status, &topic_status, "status"),              \
 		(velocity_sp, &topic_velocity_sp, "velocity_sp"),                                  \
@@ -248,7 +251,7 @@ void topic_work_handler(struct k_work *work)
 		   topic == &topic_moment_sp || topic == &topic_force_sp ||
 		   topic == &topic_velocity_sp || topic == &topic_position_sp ||
 		   topic == &topic_accel_ff || topic == &topic_moment_ff ||
-		   topic == &topic_angular_velocity_ff) {
+		   topic == &topic_angular_velocity_ff || topic == &topic_optical_flow) {
 		synapse_pb_Vector3 msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_vector3);
 	} else if (topic == &topic_attitude_sp || topic == &topic_orientation_sp) {
@@ -270,7 +273,11 @@ void topic_work_handler(struct k_work *work)
 	} else if (topic == &topic_status) {
 		synapse_pb_Status msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_status);
-	} else if (topic == &topic_imu) {
+	} else if (topic == &topic_distance) {
+		synapse_pb_Distance msg = {};
+		handler(sh, topic, &msg, (snprint_t *)&snprint_distance);
+	} else if (topic == &topic_imu || topic == &topic_imu0 || topic == &topic_imu1 ||
+		   topic == &topic_imu2) {
 		synapse_pb_Imu msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_imu);
 	} else if (topic == &topic_input_ethernet || topic == &topic_input_sbus ||
