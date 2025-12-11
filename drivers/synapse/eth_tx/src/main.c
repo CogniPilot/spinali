@@ -31,12 +31,14 @@ struct context {
 	// zros node handle
 	struct zros_node node;
 	// subscriptions
-	struct zros_sub sub_actuators, sub_odometry_estimator, sub_nav_sat_fix, sub_status;
+	struct zros_sub sub_actuators, sub_odometry_estimator, sub_nav_sat_fix, sub_optical_flow_raw,
+		sub_status;
 	// topic data
 	synapse_pb_Frame tx_frame;
 	synapse_pb_Actuators actuators;
 	synapse_pb_NavSatFix nav_sat_fix;
 	synapse_pb_Odometry odometry_estimator;
+	synapse_pb_PixartPAA3905 optical_flow_raw;
 	synapse_pb_Status status;
 	// connections
 	struct udp_tx udp;
@@ -52,9 +54,11 @@ static struct context g_ctx = {
 	.sub_actuators = {},
 	.sub_odometry_estimator = {},
 	.sub_nav_sat_fix = {},
+	.sub_optical_flow_raw = {},
 	.sub_status = {},
 	.actuators = {},
 	.odometry_estimator = {},
+	.optical_flow_raw = {},
 	.status = {},
 	.running = Z_SEM_INITIALIZER(g_ctx.running, 1, 1),
 	.stack_size = MY_STACK_SIZE,
@@ -74,6 +78,8 @@ static void send_frame(struct context *ctx, pb_size_t which_msg)
 		frame->msg.odometry = ctx->odometry_estimator;
 	} else if (which_msg == synapse_pb_Frame_status_tag) {
 		frame->msg.status = ctx->status;
+	} else if (which_msg == synapse_pb_Frame_pixart_paa3905_tag) {
+		frame->msg.pixart_paa3905 = ctx->optical_flow_raw;
 	} else if (which_msg == synapse_pb_Frame_clock_offset_tag) {
 		int64_t ticks = k_uptime_ticks();
 		int64_t sec = ticks / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
@@ -122,6 +128,12 @@ static int eth_tx_init(struct context *ctx)
 		LOG_ERR("sub init status failed: %d", ret);
 		return ret;
 	}
+	ret = zros_sub_init(&ctx->sub_optical_flow_raw, &ctx->node, &topic_optical_flow_raw,
+			    &ctx->optical_flow_raw, 15);
+	if (ret < 0) {
+		LOG_ERR("sub init optical_flow_raw failed: %d", ret);
+		return ret;
+	}
 
 	// initialize udp
 	ret = udp_tx_init(&ctx->udp);
@@ -144,6 +156,7 @@ static int eth_tx_fini(struct context *ctx)
 	zros_sub_fini(&ctx->sub_actuators);
 	zros_sub_fini(&ctx->sub_odometry_estimator);
 	zros_sub_fini(&ctx->sub_nav_sat_fix);
+	zros_sub_fini(&ctx->sub_optical_flow_raw);
 	zros_sub_fini(&ctx->sub_status);
 	zros_node_fini(&ctx->node);
 
@@ -180,6 +193,7 @@ static void eth_tx_run(void *p0, void *p1, void *p2)
 			*zros_sub_get_event(&ctx->sub_status),
 			*zros_sub_get_event(&ctx->sub_odometry_estimator),
 			*zros_sub_get_event(&ctx->sub_nav_sat_fix),
+			*zros_sub_get_event(&ctx->sub_optical_flow_raw),
 		};
 
 		int rc = 0;
@@ -206,6 +220,11 @@ static void eth_tx_run(void *p0, void *p1, void *p2)
 		if (zros_sub_update_available(&ctx->sub_odometry_estimator)) {
 			zros_sub_update(&ctx->sub_odometry_estimator);
 			send_frame(ctx, synapse_pb_Frame_odometry_tag);
+		}
+
+		if (zros_sub_update_available(&ctx->sub_optical_flow_raw)) {
+			zros_sub_update(&ctx->sub_optical_flow_raw);
+			send_frame(ctx, synapse_pb_Frame_pixart_paa3905_tag);
 		}
 
 		if (now - ticks_last_uptime > CONFIG_SYS_CLOCK_TICKS_PER_SEC) {
