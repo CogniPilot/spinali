@@ -19,7 +19,7 @@ int udp_tx_init(struct udp_tx *ctx)
 	ctx->sock =
 		zsock_socket(((struct sockaddr *)&ctx->addr)->sa_family, SOCK_DGRAM, IPPROTO_UDP);
 	if (ctx->sock < 0) {
-		LOG_ERR("failed ot create UDP socket: %d", errno);
+		LOG_ERR("failed to create UDP socket: %d", errno);
 		return -errno;
 	}
 	return 0;
