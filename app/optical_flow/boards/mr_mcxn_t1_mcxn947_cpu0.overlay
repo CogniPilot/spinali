@@ -5,8 +5,8 @@
 
 	aliases {
 		imu-stream-0 = &icm42688;
-		imu-stream-1 = &icm45686_0;
-		imu-stream-2 = &icm45686_1;
+		//imu-stream-1 = &icm45686_0;
+		//imu-stream-2 = &icm45686_1;
 		mag-stream-0 = &bmm350_0;
 		optical-flow-stream-0 = &paa3905;
 		argus-stream-0 = &afbr_s50;
