@@ -11,7 +11,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    container: ghcr.io/cognipilot/ci-minimal:v0.0.4
+    container: ghcr.io/cognipilot/ci-minimal:v0.1.1
     env:
       CMAKE_PREFIX_PATH: /opt/toolchains
     steps:
@@ -20,9 +20,31 @@ jobs:
           echo "/github/home/.local/bin" >> $GITHUB_PATH
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           path: spinali
+
+      - name: Cache Spinali west modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            bootloader
+            modules
+            tools
+            zephyr
+          key: west-${{ hashFiles('spinali/west.yml') }}
+          restore-keys: |
+            west-
+
+      - name: Cache Spinali ccache
+        uses: actions/cache@v4
+        with:
+          path: /ccache
+          key: ccache-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ github.ref_name }}-
+            ccache-main-
+            ccache-
 
       - name: Initialize
         working-directory: spinali
