@@ -20,7 +20,7 @@
 #include <synapse_topic_list.h>
 
 #define MY_STACK_SIZE 8192
-#define MY_PRIORITY   1
+#define MY_PRIORITY   3
 #define TX_BUF_SIZE   8192
 
 LOG_MODULE_REGISTER(eth_tx, LOG_LEVEL_DBG);
@@ -31,12 +31,14 @@ struct context {
 	// zros node handle
 	struct zros_node node;
 	// subscriptions
-	struct zros_sub sub_actuators, sub_argus, sub_odometry_estimator, sub_nav_sat_fix,
-		sub_optical_flow_raw, sub_status;
+	struct zros_sub sub_actuators, sub_argus, sub_imu, sub_magnetic_field,
+		sub_odometry_estimator, sub_nav_sat_fix, sub_optical_flow_raw, sub_status;
 	// topic data
 	synapse_pb_Frame tx_frame;
 	synapse_pb_Actuators actuators;
 	synapse_pb_ArgusResults argus;
+	synapse_pb_Imu imu;
+	synapse_pb_MagneticField magnetic_field;
 	synapse_pb_NavSatFix nav_sat_fix;
 	synapse_pb_Odometry odometry_estimator;
 	synapse_pb_PixartPAA3905 optical_flow_raw;
@@ -54,12 +56,16 @@ static struct context g_ctx = {
 	.node = {},
 	.sub_actuators = {},
 	.sub_argus = {},
+	.sub_imu = {},
+	.sub_magnetic_field = {},
 	.sub_odometry_estimator = {},
 	.sub_nav_sat_fix = {},
 	.sub_optical_flow_raw = {},
 	.sub_status = {},
 	.actuators = {},
 	.argus = {},
+	.imu = {},
+	.magnetic_field = {},
 	.odometry_estimator = {},
 	.optical_flow_raw = {},
 	.status = {},
@@ -77,6 +83,10 @@ static void send_frame(struct context *ctx, pb_size_t which_msg)
 		frame->msg.actuators = ctx->actuators;
 	} else if (which_msg == synapse_pb_Frame_argus_results_tag) {
 		frame->msg.argus_results = ctx->argus;
+	} else if (which_msg == synapse_pb_Frame_imu_tag) {
+		frame->msg.imu = ctx->imu;
+	} else if (which_msg == synapse_pb_Frame_magnetic_field_tag) {
+		frame->msg.magnetic_field = ctx->magnetic_field;
 	} else if (which_msg == synapse_pb_Frame_nav_sat_fix_tag) {
 		frame->msg.nav_sat_fix = ctx->nav_sat_fix;
 	} else if (which_msg == synapse_pb_Frame_odometry_tag) {
@@ -116,9 +126,20 @@ static int eth_tx_init(struct context *ctx)
 		LOG_ERR("init actuators failed: %d", ret);
 		return ret;
 	}
-	ret = zros_sub_init(&ctx->sub_argus, &ctx->node, &topic_argus, &ctx->argus, 15);
+	ret = zros_sub_init(&ctx->sub_argus, &ctx->node, &topic_argus, &ctx->argus, 100);
 	if (ret < 0) {
 		LOG_ERR("sub init argus failed: %d", ret);
+		return ret;
+	}
+	ret = zros_sub_init(&ctx->sub_imu, &ctx->node, &topic_imu, &ctx->imu, 800);
+	if (ret < 0) {
+		LOG_ERR("sub init imu failed: %d", ret);
+		return ret;
+	}
+	ret = zros_sub_init(&ctx->sub_magnetic_field, &ctx->node, &topic_magnetic_field,
+			    &ctx->magnetic_field, 100);
+	if (ret < 0) {
+		LOG_ERR("sub init magnetic_field failed: %d", ret);
 		return ret;
 	}
 	ret = zros_sub_init(&ctx->sub_odometry_estimator, &ctx->node, &topic_odometry_estimator,
@@ -139,7 +160,7 @@ static int eth_tx_init(struct context *ctx)
 		return ret;
 	}
 	ret = zros_sub_init(&ctx->sub_optical_flow_raw, &ctx->node, &topic_optical_flow_raw,
-			    &ctx->optical_flow_raw, 15);
+			    &ctx->optical_flow_raw, 126);
 	if (ret < 0) {
 		LOG_ERR("sub init optical_flow_raw failed: %d", ret);
 		return ret;
@@ -165,6 +186,8 @@ static int eth_tx_fini(struct context *ctx)
 	// close subscriptions
 	zros_sub_fini(&ctx->sub_actuators);
 	zros_sub_fini(&ctx->sub_argus);
+	zros_sub_fini(&ctx->sub_imu);
+	zros_sub_fini(&ctx->sub_magnetic_field);
 	zros_sub_fini(&ctx->sub_odometry_estimator);
 	zros_sub_fini(&ctx->sub_nav_sat_fix);
 	zros_sub_fini(&ctx->sub_optical_flow_raw);
@@ -202,6 +225,8 @@ static void eth_tx_run(void *p0, void *p1, void *p2)
 		struct k_poll_event events[] = {
 			*zros_sub_get_event(&ctx->sub_actuators),
 			*zros_sub_get_event(&ctx->sub_argus),
+			*zros_sub_get_event(&ctx->sub_imu),
+			*zros_sub_get_event(&ctx->sub_magnetic_field),
 			*zros_sub_get_event(&ctx->sub_status),
 			*zros_sub_get_event(&ctx->sub_odometry_estimator),
 			*zros_sub_get_event(&ctx->sub_nav_sat_fix),
@@ -222,6 +247,16 @@ static void eth_tx_run(void *p0, void *p1, void *p2)
 		if (zros_sub_update_available(&ctx->sub_argus)) {
 			zros_sub_update(&ctx->sub_argus);
 			send_frame(ctx, synapse_pb_Frame_argus_results_tag);
+		}
+
+		if (zros_sub_update_available(&ctx->sub_imu)) {
+			zros_sub_update(&ctx->sub_imu);
+			send_frame(ctx, synapse_pb_Frame_imu_tag);
+		}
+
+		if (zros_sub_update_available(&ctx->sub_magnetic_field)) {
+			zros_sub_update(&ctx->sub_magnetic_field);
+			send_frame(ctx, synapse_pb_Frame_magnetic_field_tag);
 		}
 
 		if (zros_sub_update_available(&ctx->sub_nav_sat_fix)) {
