@@ -1,0 +1,8 @@
+common:
+  tags:
+    - drivers
+    - sensor
+tests:
+  drivers.sensor.apa102:
+    filter: CONFIG_APA102_STRIP
+    build_only: false
