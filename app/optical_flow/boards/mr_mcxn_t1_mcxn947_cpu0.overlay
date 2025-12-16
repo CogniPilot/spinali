@@ -4,9 +4,8 @@
 / {
 
 	aliases {
-		imu-stream-0 = &icm42688;
-		imu-stream-1 = &icm45686_0;
-		imu-stream-2 = &icm45686_1;
+		imu-stream-0 = &icm45686_0;
+		imu-stream-1 = &icm45686_1;
 		mag-stream-0 = &bmm350_0;
 		optical-flow-stream-0 = &paa3905;
 		argus-stream-0 = &afbr_s50;
@@ -35,13 +34,6 @@
 
 &bmm350_0 {
 	odr = "100";
-};
-
-#include <zephyr/dt-bindings/sensor/icm42688.h>
-
-&icm42688 {
-	accel-odr = <ICM42688_DT_ACCEL_ODR_4000>;
-	gyro-odr = <ICM42688_DT_GYRO_ODR_4000>;
 };
 
 #include <zephyr/dt-bindings/sensor/icm45686.h>
