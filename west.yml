@@ -54,9 +54,9 @@ manifest:
       path: modules/hal/afbr
     - name: zros_drivers
       remote: cognipilot
-      revision: ab3843b13f7e759965da548e9967e2cebcb9692f # main 12/15/25
+      revision: fb7e9982a96c30541f60815ab8994a1fcdfb8f55 # main 12/16/25
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
-      revision: 0d58820df9aec64df520f2543adca43165a5f9fe # main 12/15/25
+      revision: 4b4d98928fb9ab4a98133b5607d619a32de6af11 # main 12/16/25
       path: modules/lib/zephyr_boards
