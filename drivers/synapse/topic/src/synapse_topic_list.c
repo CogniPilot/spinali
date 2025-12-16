@@ -210,6 +210,7 @@ ZROS_TOPIC_DEFINE(optical_flow_raw, synapse_pb_PixartPAA3905);
 ZROS_TOPIC_DEFINE(orientation_sp, synapse_pb_Quaternion);
 ZROS_TOPIC_DEFINE(position_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DEFINE(pwm, synapse_pb_Pwm);
+ZROS_TOPIC_DEFINE(rtcm3, synapse_pb_Rtcm3);
 ZROS_TOPIC_DEFINE(safety, synapse_pb_Safety);
 ZROS_TOPIC_DEFINE(status, synapse_pb_Status);
 ZROS_TOPIC_DEFINE(velocity_sp, synapse_pb_Vector3);
@@ -247,6 +248,7 @@ static struct zros_topic *topic_list[] = {
 	&topic_optical_flow_raw,
 	&topic_position_sp,
 	&topic_pwm,
+	&topic_rtcm3,
 	&topic_safety,
 	&topic_status,
 	&topic_velocity_sp,
