@@ -81,7 +81,8 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 		(orientation_sp, &topic_orientation_sp, "orientation_sp"),                         \
 		(optical_flow_raw, &topic_optical_flow_raw, "optical_flow_raw"),                   \
 		(position_sp, &topic_position_sp, "position_sp"), (pwm, &topic_pwm, "pwm"),        \
-		(safety, &topic_safety, "safety"), (status, &topic_status, "status"),              \
+		(rtcm3, &topic_rtcm3, "rtcm3"), (safety, &topic_safety, "safety"),                 \
+		(status, &topic_status, "status"),                                                 \
 		(velocity_sp, &topic_velocity_sp, "velocity_sp"),                                  \
 		(wheel_odometry, &topic_wheel_odometry, "wheel_odometry")
 

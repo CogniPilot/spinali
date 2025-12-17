@@ -42,7 +42,7 @@ manifest:
       path: modules/lib/cyecca
     - name: synapse_pb
       remote: cognipilot
-      revision: 44ebbd1ed65ace0e9f8efcaa502f464c92faa78b # main 12/10/25
+      revision: d14faa3fbce8ebe6412b252724ba3b47df1106c7 # main 12/16/25
       path: modules/lib/synapse_pb
     - name: hal_nxp
       remote: cognipilot
