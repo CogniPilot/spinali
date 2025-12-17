@@ -32,6 +32,7 @@ manifest:
           - fatfs
           - segger
           - mcuboot
+          - zcbor
     - name: zros
       remote: cognipilot
       revision: 843348bca3a15e914914b90057369b9616302e20 # main 10/27/25
