@@ -1,0 +1,20 @@
+# Copyright (c) 2025 CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+config SPINALI_SYNAPSE_MCUMGR_HOOKS
+	bool "MCUmgr custom hooks"
+	default n
+	depends on MCUMGR_GRP_OS_INFO_CUSTOM_HOOKS
+	depends on HWINFO
+	help
+	  This option enables custom MCUmgr hooks for hardware identification.
+	  Adds support for the 'h' format character in OS info queries to
+	  return the chip's unique hardware ID.
+
+if SPINALI_SYNAPSE_MCUMGR_HOOKS
+
+module = SPINALI_SYNAPSE_MCUMGR_HOOKS
+module-str = synapse_mcumgr_hooks
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_SYNAPSE_MCUMGR_HOOKS

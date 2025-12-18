@@ -17,13 +17,15 @@ Usage:
     python mcuboot_device_info.py <device_ip> [--port PORT] [--timeout TIMEOUT]
 
 Example:
-    python mcuboot_device_info.py 192.0.2.2
-    python mcuboot_device_info.py 192.0.2.2 --port 1337 --all
+    python mcuboot_device_info.py 192.0.2.1
+    python mcuboot_device_info.py 192.0.2.1 --port 1337 --all
 """
 
 import argparse
+import re
 import socket
 import struct
+import subprocess
 import sys
 from dataclasses import dataclass
 from enum import IntEnum
@@ -37,6 +39,7 @@ except ImportError:
 
 
 # SMP Protocol Constants
+
 class SMPOp(IntEnum):
     """SMP Operation codes"""
     READ = 0        # Read request
@@ -65,7 +68,6 @@ class OSMgmtCmd(IntEnum):
     ECHO = 0
     CONSOLE = 1
     TASKSTAT = 2
-    MPSTAT = 3
     DATETIME = 4
     RESET = 5
     MCUMGR_PARAMS = 6
@@ -114,7 +116,7 @@ SMP_HEADER_SIZE = 8
 class SMPHeader:
     """SMP packet header"""
     op: int
-    version: int = 1  # Use SMP v2 for better error reporting
+    version: int = 1
     flags: int = 0
     length: int = 0
     group: int = 0
@@ -155,7 +157,6 @@ class SMPHeader:
 
 class SMPClient:
     """SMP client for communicating with MCUboot devices over UDP"""
-
     DEFAULT_PORT = 1337
     DEFAULT_TIMEOUT = 5.0
 
@@ -260,10 +261,6 @@ class SMPClient:
         """Get task/thread statistics"""
         return self._send_request(SMPGroup.OS, OSMgmtCmd.TASKSTAT)
 
-    def get_memory_stats(self) -> dict:
-        """Get memory pool statistics"""
-        return self._send_request(SMPGroup.OS, OSMgmtCmd.MPSTAT)
-
     def get_datetime(self) -> str:
         """Get device date/time"""
         result = self._send_request(SMPGroup.OS, OSMgmtCmd.DATETIME)
@@ -334,6 +331,33 @@ def format_bytes(size: int) -> str:
     return f"{size:.1f} TB"
 
 
+def get_mac_address(ip: str) -> Optional[str]:
+    """Get MAC address from ARP table for the given IP"""
+    try:
+        # Try 'ip neigh' first (modern Linux)
+        result = subprocess.run(
+            ["ip", "neigh", "show", ip],
+            capture_output=True, text=True, timeout=2
+        )
+        if result.returncode == 0 and result.stdout:
+            match = re.search(r'lladdr\s+([0-9a-fA-F:]{17})', result.stdout)
+            if match:
+                return match.group(1).upper()
+
+        # Try 'arp' command (older systems)
+        result = subprocess.run(
+            ["arp", "-n", ip],
+            capture_output=True, text=True, timeout=2
+        )
+        if result.returncode == 0 and result.stdout:
+            match = re.search(r'([0-9a-fA-F:]{17})', result.stdout)
+            if match:
+                return match.group(1).upper()
+    except Exception:
+        pass
+    return None
+
+
 def format_hash(hash_bytes: bytes) -> str:
     """Format hash bytes to hex string"""
     if isinstance(hash_bytes, bytes):
@@ -361,6 +385,27 @@ def print_device_info(client: SMPClient, verbose: bool = False) -> None:
         print(f"✗ Echo failed: {e}")
         return
 
+    # Hardware Identification
+    print_section("Hardware Identification")
+    print(f"IP Address:  {client.host}")
+    mac = get_mac_address(client.host)
+    if mac:
+        print(f"MAC Address: {mac}")
+    else:
+        print("MAC Address: (not available in ARP table)")
+
+    # Query chip hardware ID using custom 'h' format character
+    try:
+        hwid_info = client.get_os_info("h")
+        # Response format: "hwid:XXXXXXXXXXXX"
+        if hwid_info.startswith("hwid:"):
+            hwid = hwid_info[5:]  # Strip "hwid:" prefix
+            print(f"Hardware ID: {hwid.upper()}")
+        elif hwid_info:
+            print(f"Hardware ID: {hwid_info}")
+    except Exception:
+        pass  # Hardware ID not available (custom hook not present)
+
     # Bootloader Information
     print_section("Bootloader Information")
     try:
@@ -384,11 +429,39 @@ def print_device_info(client: SMPClient, verbose: bool = False) -> None:
 
     # OS/Application Information
     print_section("OS/Application Information")
-    try:
-        os_info = client.get_os_info("a")
-        print(os_info)
-    except Exception as e:
-        print(f"Could not retrieve OS info: {e}")
+    os_info = None
+    # Retry up to 3 times for reliability
+    for attempt in range(3):
+        try:
+            # Query all fields in a single request
+            # Format order: s=kernel, n=node, r=release, v=version, b=build, m=machine, p=processor, i=platform, o=os
+            os_info = client.get_os_info("snrvbmpio")
+            break
+        except Exception:
+            if attempt == 2:
+                pass  # Give up after 3 attempts
+
+    if os_info:
+        # Parse space-separated fields
+        # Build date has 5 parts (e.g., "Wed Dec 17 17:05:03 2025")
+        parts = os_info.split()
+
+        if len(parts) >= 13:  # 4 fields + 5 build parts + 4 more fields
+            print(f"{'Kernel:':<18}{parts[0]}")
+            print(f"{'Application:':<18}{parts[1]}")
+            print(f"{'Git Hash:':<18}{parts[2]}")
+            print(f"{'Kernel Version:':<18}{parts[3]}")
+            build_date = " ".join(parts[4:9])
+            print(f"{'Architecture:':<18}{parts[9]}")
+            print(f"{'Processor:':<18}{parts[10]}")
+            print(f"{'Board:':<18}{parts[11]}")
+            print(f"{'OS:':<18}{parts[12]}")
+            print(f"{'Build Date:':<18}{build_date}")
+        else:
+            # Fallback: just print raw output
+            print(os_info)
+    else:
+        print("Could not retrieve OS info (timeout)")
 
     # Image State
     print_section("Image State")
@@ -470,35 +543,30 @@ def print_device_info(client: SMPClient, verbose: bool = False) -> None:
             if not tasks:
                 print("No task statistics available")
             else:
-                print(f"{'Task':<20} {'Prio':>5} {'State':>6} {'Stack Use':>10} {'Stack Size':>10}")
-                print("-" * 55)
-                for name, info in tasks.items():
-                    prio = info.get("prio", 0)
-                    state = info.get("state", 0)
-                    stkuse = info.get("stkuse", 0) * 4  # Convert words to bytes
-                    stksiz = info.get("stksiz", 0) * 4
-                    print(f"{name:<20} {prio:>5} {state:>6} {stkuse:>10} {stksiz:>10}")
+                # Check if stack info is available (any non-zero values)
+                has_stack_info = any(
+                    info.get("stkuse", 0) != 0 or info.get("stksiz", 0) != 0
+                    for info in tasks.values()
+                )
+
+                if has_stack_info:
+                    print(f"{'Task':<24} {'Prio':>5} {'State':>6} {'Stack Use':>10} {'Stack Size':>10}")
+                    print("-" * 59)
+                    for name, info in tasks.items():
+                        prio = info.get("prio", 0)
+                        state = info.get("state", 0)
+                        stkuse = info.get("stkuse", 0)
+                        stksiz = info.get("stksiz", 0)
+                        print(f"{name:<24} {prio:>5} {state:>6} {stkuse:>10} {stksiz:>10}")
+                else:
+                    print(f"{'Task':<24} {'Prio':>5} {'State':>6}")
+                    print("-" * 39)
+                    for name, info in tasks.items():
+                        prio = info.get("prio", 0)
+                        state = info.get("state", 0)
+                        print(f"{name:<24} {prio:>5} {state:>6}")
         except Exception as e:
             print(f"Could not retrieve task stats: {e}")
-
-        print_section("Memory Pool Statistics")
-        try:
-            mpstats = client.get_memory_stats()
-
-            # Remove any error fields if present
-            pools = {k: v for k, v in mpstats.items() if k not in ("rc", "err")}
-
-            if not pools:
-                print("No memory pool statistics available")
-            else:
-                for name, info in pools.items():
-                    print(f"\nPool: {name}")
-                    print(f"  Block size: {info.get('blksiz', 0)} bytes")
-                    print(f"  Total blocks: {info.get('nblks', 0)}")
-                    print(f"  Free blocks: {info.get('nfree', 0)}")
-                    print(f"  Min free: {info.get('min', 0)}")
-        except Exception as e:
-            print(f"Could not retrieve memory stats: {e}")
 
 
 def main():
@@ -507,11 +575,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s 192.0.2.2
-  %(prog)s 192.0.2.2 --port 1337
-  %(prog)s 192.0.2.2 --verbose
-  %(prog)s 192.0.2.2 --echo "test message"
-  %(prog)s 192.0.2.2 --reset
+  %(prog)s 192.0.2.1
+  %(prog)s 192.0.2.1 --port 1337
+  %(prog)s 192.0.2.1 --verbose
+  %(prog)s 192.0.2.1 --echo "test message"
+  %(prog)s 192.0.2.1 --reset
         """
     )
 
