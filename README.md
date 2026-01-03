@@ -5,6 +5,11 @@ Connected Sensors and Actuators with Zephyr RTOS
 
 See [documentation](https://cognipilot.org/).
 
+After running `west update`, fetch the required binary blobs:
+```bash
+west blobs fetch
+```
+
 Please make sure that your target already has mcuboot (with the default rsa-2048 key). If it does not (or is the first time flashing a new device) please build and flash mcuboot for your target platform (example for the mr-mcxn-t1):
 ```bash
 cd ~/cognipilot/ws/spinali
