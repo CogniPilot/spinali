@@ -57,7 +57,3 @@
 &afbr_s50 {
 	odr = <100>;
 };
-
-&paa3905 {
-	led-force-on;
-};
