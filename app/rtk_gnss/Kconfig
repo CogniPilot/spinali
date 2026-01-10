@@ -1,0 +1,19 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "CogniPilot - SPINALI - RTK GNSS"
+menu "Zephyr"
+source "Kconfig.zephyr"
+endmenu
+
+menu "RTK_GNSS"
+
+config SPINALI_RTK_GNSS_LIGHTING
+  bool "enable lighting"
+  help
+    Enable lighting
+
+module = SPINALI_RTK_GNSS
+module-str = spinali_rtk_gnss
+source "subsys/logging/Kconfig.template.log_config"
+endmenu

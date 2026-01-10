@@ -18,3 +18,42 @@ module-str = synapse_mcumgr_hooks
 source "subsys/logging/Kconfig.template.log_config"
 
 endif # SPINALI_SYNAPSE_MCUMGR_HOOKS
+
+# HCDF Management Group
+menuconfig MCUMGR_GRP_HCDF
+	bool "MCUmgr HCDF management group"
+	default n
+	depends on MCUMGR
+	select MCUMGR_SMP_CBOR_MIN_DECODING_LEVEL_2
+	help
+	  Enables MCUmgr handlers for HCDF (Hardware Configuration Descriptive
+	  Format) management. This allows Dendrite to query the device's HCDF
+	  URL and content hash for 3D visualization.
+
+if MCUMGR_GRP_HCDF
+
+config MCUMGR_GRP_HCDF_URL
+	string "HCDF URL"
+	default ""
+	help
+	  The URL where this device's HCDF file can be fetched.
+	  Example: https://hcdf.cognipilot.org/mr_mcxn_t1/optical-flow.hcdf
+
+config MCUMGR_GRP_HCDF_SHA
+	string "HCDF SHA256 hash"
+	default ""
+	help
+	  The SHA256 hash of the HCDF file content. This allows Dendrite
+	  to skip fetching if the cached version matches.
+
+config MCUMGR_GRP_HCDF_URL_MAX_LEN
+	int "Maximum HCDF URL length"
+	default 256
+	help
+	  Maximum length of the HCDF URL string.
+
+module = MCUMGR_GRP_HCDF
+module-str = mcumgr_grp_hcdf
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # MCUMGR_GRP_HCDF

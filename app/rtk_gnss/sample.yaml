@@ -1,0 +1,11 @@
+sample:
+  description: rtk_gnss
+  name: rtk_gnss
+common:
+  build_only: true
+tests:
+  rtk_gnss.mr_mcxn_t1/mcxn947/cpu0:
+    tags:
+      - rtk_gnss
+    integration_platforms:
+      - mr_mcxn_t1/mcxn947/cpu0

@@ -1,0 +1,115 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright 2025 CogniPilot Foundation */
+
+/ {
+	aliases {
+		imu-stream-0 = &icm45686_0;
+		mag-stream-0 = &bmm350_0;
+		gnss = &gnss1;
+	};
+
+	chosen {
+		zephyr,rtk-serial = &flexcomm7_lpuart7;
+	};
+};
+
+/* USB Shell IRQ priority lower than SPI IRQs */
+&zephyr_udc0 {
+	interrupts = <0x43 0x6>;
+};
+
+&bmm350_0 {
+	odr = "100";
+};
+
+#include <zephyr/dt-bindings/sensor/icm45686.h>
+
+&icm45686_0 {
+	/* Configure to output 4-samples every 1.25-ms (800-Hz) */
+	accel-odr = <ICM45686_DT_ACCEL_ODR_3200>;
+	gyro-odr = <ICM45686_DT_GYRO_ODR_3200>;
+	fifo-watermark = <4>;
+	fifo-watermark-equals;
+};
+
+/* Disable icm45686_1 - FC7 is used for GNSS corrections UART */
+&icm45686_1 {
+	status = "disabled";
+};
+
+/* Disable optical flow board sensors - FC3 is used for GNSS UART */
+&afbr_s50 {
+	status = "disabled";
+};
+
+&paa3905 {
+	status = "disabled";
+};
+
+&icm42688 {
+	status = "disabled";
+};
+
+/* Disable optical flow SPI interfaces */
+&flexcomm6_lpspi6 {
+	status = "disabled";
+};
+
+&flexcomm9_lpspi9 {
+	status = "disabled";
+};
+
+/* Reconfigure FlexCOMM3 from SPI (optical flow) to UART (GNSS) */
+&flexcomm3_lpspi3 {
+	status = "disabled";
+};
+
+&flexcomm3_lpuart3 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexcomm3_lpuart>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+
+	gnss1: gnss {
+		status = "okay";
+		compatible = "u-blox,f9p";
+		fix-rate = <100>;
+	};
+};
+
+/* GNSS Corrections Passthrough UART (FC7) */
+&flexcomm7_lpspi7 {
+	status = "disabled";
+};
+
+&flexcomm7_lpuart7 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexcomm7_lpuart>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+};
+
+/* Pinctrl for GNSS UARTs */
+&pinctrl {
+	/* GNSS Primary UART (F9P TXD1/RXD1) */
+	pinmux_flexcomm3_lpuart: pinmux_flexcomm3_lpuart {
+		group0 {
+			pinmux = <FC3_P0_PIO1_0>,
+				 <FC3_P1_PIO1_1>;
+			slew-rate = "fast";
+			drive-strength = "low";
+			input-enable;
+		};
+	};
+
+	/* GNSS Corrections UART (F9P TXD2/RXD2) */
+	pinmux_flexcomm7_lpuart: pinmux_flexcomm7_lpuart {
+		group0 {
+			pinmux = <FC7_P0_PIO3_2>,
+				 <FC7_P1_PIO3_3>;
+			slew-rate = "fast";
+			drive-strength = "low";
+			input-enable;
+		};
+	};
+};
