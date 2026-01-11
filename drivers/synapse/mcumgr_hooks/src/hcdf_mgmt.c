@@ -65,7 +65,7 @@ static int hcdf_mgmt_info(struct smp_streamer *ctxt)
 	ok = zcbor_tstr_put_lit(zse, "url") &&
 	     zcbor_tstr_put_term(zse, url, CONFIG_MCUMGR_GRP_HCDF_URL_MAX_LEN) &&
 	     zcbor_tstr_put_lit(zse, "sha") &&
-	     zcbor_tstr_put_term(zse, sha, 65);  /* SHA256 is 64 hex chars + null */
+	     zcbor_tstr_put_term(zse, sha, 65); /* SHA256 is 64 hex chars + null */
 
 	return ok ? MGMT_ERR_EOK : MGMT_ERR_EMSGSIZE;
 }
@@ -90,10 +90,11 @@ static int hcdf_mgmt_translate_error_code(uint16_t err)
 #endif
 
 static const struct mgmt_handler hcdf_mgmt_handlers[] = {
-	[HCDF_MGMT_ID_INFO] = {
-		.mh_read = hcdf_mgmt_info,
-		.mh_write = NULL,
-	},
+	[HCDF_MGMT_ID_INFO] =
+		{
+			.mh_read = hcdf_mgmt_info,
+			.mh_write = NULL,
+		},
 };
 
 static struct mgmt_group hcdf_mgmt_group = {

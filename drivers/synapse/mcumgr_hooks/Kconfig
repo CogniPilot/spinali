@@ -37,14 +37,17 @@ config MCUMGR_GRP_HCDF_URL
 	default ""
 	help
 	  The URL where this device's HCDF file can be fetched.
-	  Example: https://hcdf.cognipilot.org/mr_mcxn_t1/optical-flow.hcdf
+	  Format: https://hcdf.cognipilot.org/{board}/{device}/{device}.hcdf
+	  Example: https://hcdf.cognipilot.org/mr_mcxn_t1/optical-flow/optical-flow.hcdf
 
 config MCUMGR_GRP_HCDF_SHA
-	string "HCDF SHA256 hash"
+	string "HCDF SHA256 hash (short)"
 	default ""
 	help
-	  The SHA256 hash of the HCDF file content. This allows Dendrite
-	  to skip fetching if the cached version matches.
+	  The first 8 characters of the SHA256 hash of the HCDF file content.
+	  This allows Dendrite to skip fetching if the cached version matches.
+	  The SHA can be found in the HCDF filename (e.g., a8321a14-optical-flow.hcdf).
+	  If empty, Dendrite will always fetch the latest version.
 
 config MCUMGR_GRP_HCDF_URL_MAX_LEN
 	int "Maximum HCDF URL length"
