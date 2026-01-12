@@ -32,6 +32,7 @@ manifest:
           - fatfs
           - segger
           - mcuboot
+          - zcbor
     - name: zros
       remote: cognipilot
       revision: 843348bca3a15e914914b90057369b9616302e20 # main 10/27/25
@@ -58,5 +59,9 @@ manifest:
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
-      revision: 4b4d98928fb9ab4a98133b5607d619a32de6af11 # main 12/16/25
+      revision: 627f00aeea48f48885463542daf35068fb35726c # pr-mcuboot-mcxn-t1 01/03/26
       path: modules/lib/zephyr_boards
+    - name: hcdf_models
+      remote: cognipilot
+      revision: main
+      path: modules/lib/hcdf_models

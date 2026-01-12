@@ -1,0 +1,11 @@
+sample:
+  description: flex_io
+  name: flex_io
+common:
+  build_only: true
+tests:
+  flex_io.mr_mcxn_t1/mcxn947/cpu0:
+    tags:
+      - flex_io
+    integration_platforms:
+      - mr_mcxn_t1/mcxn947/cpu0

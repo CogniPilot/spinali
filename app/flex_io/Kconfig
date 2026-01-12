@@ -1,0 +1,19 @@
+# Copyright (c) 2023, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "CogniPilot - SPINALI - Flex IO"
+menu "Zephyr"
+source "Kconfig.zephyr"
+endmenu
+
+menu "FLEX_IO"
+
+config SPINALI_FLEX_IO_LIGHTING
+  bool "enable lighting"
+  help
+    Enable lighting
+
+module = SPINALI_FLEX_IO
+module-str = spinali_flex_io
+source "subsys/logging/Kconfig.template.log_config"
+endmenu

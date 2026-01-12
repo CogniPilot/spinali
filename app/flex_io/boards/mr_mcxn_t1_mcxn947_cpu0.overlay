@@ -1,0 +1,193 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright 2025 CogniPilot Foundation */
+
+/ {
+	aliases {
+		imu-stream-0 = &icm45686_0;
+		mag-stream-0 = &bmm350_0;
+		pwm-0 = &flexpwm0_pwm0;
+		pwm-1 = &flexpwm1_pwm0;
+	};
+};
+
+/* USB Shell IRQ priority lower than SPI IRQs */
+&zephyr_udc0 {
+	interrupts = <0x43 0x6>;
+};
+
+&bmm350_0 {
+	odr = "100";
+};
+
+#include <zephyr/dt-bindings/sensor/icm45686.h>
+
+&icm45686_0 {
+	/* Configure to output 4-samples every 1.25-ms (800-Hz) */
+	accel-odr = <ICM45686_DT_ACCEL_ODR_3200>;
+	gyro-odr = <ICM45686_DT_GYRO_ODR_3200>;
+	fifo-watermark = <4>;
+	fifo-watermark-equals;
+};
+
+/* Disable icm45686_1 - not present on flex_io board */
+&icm45686_1 {
+	status = "disabled";
+};
+
+/* Disable optical flow board sensors - not present on flex_io board */
+&afbr_s50 {
+	status = "disabled";
+};
+
+&paa3905 {
+	status = "disabled";
+};
+
+&icm42688 {
+	status = "disabled";
+};
+
+/* Disable optical flow SPI interfaces */
+&flexcomm3_lpspi3 {
+	status = "disabled";
+};
+
+&flexcomm6_lpspi6 {
+	status = "disabled";
+};
+
+&flexcomm7_lpspi7 {
+	status = "disabled";
+};
+
+&flexcomm9_lpspi9 {
+	status = "disabled";
+};
+
+/* Enable I2C on FC3 */
+&flexcomm3_lpi2c3 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexcomm3_lpi2c>;
+	pinctrl-names = "default";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+/* Enable FlexCOMM0 parent for UART */
+&flexcomm0 {
+	status = "okay";
+};
+
+/* Enable UART on FC0 (with flow control) */
+&flexcomm0_lpuart0 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexcomm0_lpuart>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+};
+
+/* Enable FlexCOMM2 parent for UART */
+&flexcomm2 {
+	status = "okay";
+};
+
+/* Enable UART on FC2 (with flow control) */
+&flexcomm2_lpuart2 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexcomm2_lpuart>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+};
+
+/* Enable FlexPWM0 */
+&flexpwm0 {
+	status = "okay";
+};
+
+&flexpwm0_pwm0 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexpwm0_pwm0>;
+	pinctrl-names = "default";
+};
+
+/* Enable FlexPWM1 */
+&flexpwm1 {
+	status = "okay";
+};
+
+&flexpwm1_pwm0 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexpwm1_pwm0>;
+	pinctrl-names = "default";
+};
+
+/* ADC1 - TODO: Add channel configuration when needed */
+&lpadc1 {
+	status = "okay";
+};
+
+/* Pinctrl definitions */
+&pinctrl {
+	/* FC3 I2C (P1_0 SDA, P1_1 SCL) */
+	pinmux_flexcomm3_lpi2c: pinmux_flexcomm3_lpi2c {
+		group0 {
+			pinmux = <FC3_P0_PIO1_0>,
+				 <FC3_P1_PIO1_1>;
+			slew-rate = "fast";
+			drive-strength = "low";
+			input-enable;
+			bias-pull-up;
+			drive-open-drain;
+		};
+	};
+
+	/* FC0 UART with RTS/CTS */
+	pinmux_flexcomm0_lpuart: pinmux_flexcomm0_lpuart {
+		group0 {
+			pinmux = <FC0_P0_PIO0_16>,
+				 <FC0_P1_PIO0_17>,
+				 <FC0_P2_PIO0_18>,
+				 <FC0_P3_PIO0_7>;
+			slew-rate = "fast";
+			drive-strength = "low";
+			input-enable;
+		};
+	};
+
+	/* FC2 UART with RTS/CTS */
+	pinmux_flexcomm2_lpuart: pinmux_flexcomm2_lpuart {
+		group0 {
+			pinmux = <FC2_P0_PIO4_0>,
+				 <FC2_P1_PIO4_1>,
+				 <FC2_P2_PIO4_2>,
+				 <FC2_P3_PIO4_3>;
+			slew-rate = "fast";
+			drive-strength = "low";
+			input-enable;
+		};
+	};
+
+	/* FlexPWM0 channels */
+	pinmux_flexpwm0_pwm0: pinmux_flexpwm0_pwm0 {
+		group0 {
+			pinmux = <PWM0_A0_PIO3_0>,
+				 <PWM0_B1_PIO3_7>,
+				 <PWM0_B2_PIO3_9>,
+				 <PWM0_B3_PIO3_11>;
+			slew-rate = "fast";
+			drive-strength = "low";
+		};
+	};
+
+	/* FlexPWM1 channels */
+	pinmux_flexpwm1_pwm0: pinmux_flexpwm1_pwm0 {
+		group0 {
+			pinmux = <PWM1_A2_PIO2_2>,
+				 <PWM1_B0_PIO2_7>,
+				 <PWM1_B1_PIO2_5>,
+				 <PWM1_B3_PIO2_1>;
+			slew-rate = "fast";
+			drive-strength = "low";
+		};
+	};
+
+};

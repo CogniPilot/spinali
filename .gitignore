@@ -8,7 +8,7 @@
 .venv
 
 # build
-build/
+build*
 install/
 
 __pycache__/
