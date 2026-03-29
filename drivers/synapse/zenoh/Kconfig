@@ -1,0 +1,25 @@
+# Copyright CogniPilot Foundation 2025
+# SPDX-License-Identifier: Apache-2.0
+
+config SPINALI_SYNAPSE_ZENOH
+	bool "Zenoh Transport with FlatBuffers"
+	default n
+	depends on ZROS
+	help
+	  Zenoh transport publishing processed optical flow data
+	  using FlatBuffers serialization.
+
+if SPINALI_SYNAPSE_ZENOH
+
+config ZENOH_LOCATOR
+	string "Zenoh router locator"
+	default "udp/192.0.2.2:7447"
+	help
+	  Zenoh router address to connect to in client mode.
+	  Use udp/ prefix for UDP or tcp/ prefix for TCP.
+
+module = SPINALI_SYNAPSE_ZENOH
+module-str = synapse_zenoh
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_SYNAPSE_ZENOH

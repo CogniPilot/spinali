@@ -213,6 +213,8 @@ ZROS_TOPIC_DEFINE(pwm, synapse_pb_Pwm);
 ZROS_TOPIC_DEFINE(safety, synapse_pb_Safety);
 ZROS_TOPIC_DEFINE(status, synapse_pb_Status);
 ZROS_TOPIC_DEFINE(velocity_sp, synapse_pb_Vector3);
+ZROS_TOPIC_DEFINE(vehicle_optical_flow, synapse_topic_VehicleOpticalFlowData_t);
+ZROS_TOPIC_DEFINE(vehicle_optical_flow_vel, synapse_topic_VehicleOpticalFlowVelData_t);
 ZROS_TOPIC_DEFINE(wheel_odometry, synapse_pb_WheelOdometry);
 
 static struct zros_topic *topic_list[] = {
@@ -245,6 +247,8 @@ static struct zros_topic *topic_list[] = {
 	&topic_odometry_ethernet,
 	&topic_orientation_sp,
 	&topic_optical_flow_raw,
+	&topic_vehicle_optical_flow,
+	&topic_vehicle_optical_flow_vel,
 	&topic_position_sp,
 	&topic_pwm,
 	&topic_safety,

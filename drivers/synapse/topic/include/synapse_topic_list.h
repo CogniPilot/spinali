@@ -27,6 +27,8 @@
 #include <synapse_pb/vector3.pb.h>
 #include <synapse_pb/wheel_odometry.pb.h>
 
+#include "synapse_optical_flow_reader.h"
+
 /********************************************************************
  * helper
  ********************************************************************/
@@ -79,6 +81,8 @@ ZROS_TOPIC_DECLARE(topic_pwm, synapse_pb_Pwm);
 ZROS_TOPIC_DECLARE(topic_safety, synapse_pb_Safety);
 ZROS_TOPIC_DECLARE(topic_status, synapse_pb_Status);
 ZROS_TOPIC_DECLARE(topic_velocity_sp, synapse_pb_Vector3);
+ZROS_TOPIC_DECLARE(topic_vehicle_optical_flow, synapse_topic_VehicleOpticalFlowData_t);
+ZROS_TOPIC_DECLARE(topic_vehicle_optical_flow_vel, synapse_topic_VehicleOpticalFlowVelData_t);
 ZROS_TOPIC_DECLARE(topic_wheel_odometry, synapse_pb_WheelOdometry);
 
 /********************************************************************

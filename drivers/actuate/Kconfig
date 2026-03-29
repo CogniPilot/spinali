@@ -3,6 +3,4 @@
 
 menu "Actuate"
 
-rsource "*/Kconfig"
-
 endmenu

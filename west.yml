@@ -65,3 +65,11 @@ manifest:
       remote: cognipilot
       revision: main
       path: modules/lib/hcdf_models
+    - name: synapse_msgs_fbs
+      url: https://github.com/CogniPilot/synapse_msgs_fbs.git
+      revision: 479a77710e7f2b5a94ce7f39f13e25d95364a59f # cerebri2
+      path: modules/lib/synapse_msgs_fbs
+    - name: zenoh-pico
+      url: https://github.com/eclipse-zenoh/zenoh-pico.git
+      revision: main
+      path: modules/lib/zenoh-pico

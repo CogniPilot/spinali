@@ -1,0 +1,61 @@
+# Copyright CogniPilot Foundation 2025
+# SPDX-License-Identifier: Apache-2.0
+
+config SPINALI_VEHICLE_OPTICAL_FLOW
+	bool "Vehicle Optical Flow Processing"
+	default n
+	depends on ZROS
+	help
+	  PX4-style optical flow processing with gyro compensation,
+	  coning corrections, and range fusion.
+
+if SPINALI_VEHICLE_OPTICAL_FLOW
+
+config VOF_RATE
+	int "Max output rate (Hz)"
+	default 70
+	help
+	  Maximum publication rate for processed optical flow data.
+
+config VOF_SCALE
+	int "Flow scale factor (x100)"
+	default 100
+	help
+	  Scale factor applied to accumulated flow. 100 = 1.0x.
+
+config VOF_ROT
+	int "Sensor rotation (degrees: 0, 90, 180, 270)"
+	default 0
+	help
+	  Yaw rotation of optical flow sensor relative to body frame.
+
+config VOF_MINHGT
+	int "Min ground distance (cm)"
+	default 7
+	help
+	  Minimum reliable ground distance in centimeters.
+
+config VOF_MAXHGT
+	int "Max ground distance (cm)"
+	default 2000
+	help
+	  Maximum reliable ground distance in centimeters.
+
+config VOF_MAXR
+	int "Max flow rate (x100 rad/s)"
+	default 800
+	help
+	  Maximum measurable angular rate. 800 = 8.0 rad/s.
+
+config VOF_SENS
+	int "PAA3905 sensitivity (x100 counts/rad)"
+	default 1150
+	help
+	  PAA3905 sensitivity for converting raw counts to radians.
+	  Depends on CPI setting and lens focal length.
+
+module = SPINALI_VEHICLE_OPTICAL_FLOW
+module-str = vehicle_optical_flow
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_VEHICLE_OPTICAL_FLOW
