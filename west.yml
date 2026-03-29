@@ -70,6 +70,6 @@ manifest:
       revision: 479a77710e7f2b5a94ce7f39f13e25d95364a59f # cerebri2
       path: modules/lib/synapse_msgs_fbs
     - name: zenoh-pico
-      url: https://github.com/eclipse-zenoh/zenoh-pico.git
-      revision: main
+      url: https://github.com/CogniPilot/zenoh-pico.git
+      revision: spinali-kconfig-guards
       path: modules/lib/zenoh-pico
