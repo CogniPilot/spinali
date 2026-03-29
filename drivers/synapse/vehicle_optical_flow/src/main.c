@@ -73,8 +73,7 @@ struct context {
 	struct k_thread thread_data;
 };
 
-/* Place context (incl. ring buffers) in SRAMX to save main RAM */
-static struct context g_ctx __attribute__((section("SRAMX.bss"))) = {
+static struct context g_ctx = {
 	.node = {},
 	.sub_optical_flow_raw = {},
 	.sub_imu = {},
@@ -575,6 +574,6 @@ static int vof_sys_init(void)
 	return start(&g_ctx);
 }
 
-SYS_INIT(vof_sys_init, APPLICATION, 0);
+SYS_INIT(vof_sys_init, APPLICATION, 91);
 
 /* vi: ts=4 sw=4 et */

@@ -5,8 +5,6 @@
 
 	aliases {
 		imu-stream-0 = &icm45686_0;
-		imu-stream-1 = &icm45686_1;
-		mag-stream-0 = &bmm350_0;
 		optical-flow-stream-0 = &paa3905;
 		argus-stream-0 = &afbr_s50;
 	};
@@ -17,23 +15,26 @@
 	interrupts = <0x43 0x6>;
 };
 
-/* AFBR-S50 SPI priority lower than IMU's running at 800-Hz */
+/* AFBR-S50 SPI priority */
 &flexcomm3 {
 	interrupts = <0x26 0x00>;
 };
 
-/* IMU-400Hz SPI priority lower than IMU's running at 800-Hz */
-&flexcomm7 {
-	interrupts = <0x2a 0x01>;
-};
-
-/* PAA3905 SPI priority lower than IMU's running at 800-Hz */
+/* PAA3905 SPI priority */
 &flexcomm9 {
 	interrupts = <0x2c 0x01>;
 };
 
+/* Disable unused sensors */
 &bmm350_0 {
-	odr = "100";
+	status = "disabled";
+};
+
+/* icm45686_1 not aliased — not used for streaming */
+
+/* Lower ethernet MAC interrupt priority to prevent early RX before net stack ready */
+&enet_mac {
+	interrupts = <0x8b 0x4>, <0x8c 0x4>, <0x8d 0x4>;
 };
 
 #include <zephyr/dt-bindings/sensor/icm45686.h>
@@ -43,14 +44,6 @@
 	accel-odr = <ICM45686_DT_ACCEL_ODR_3200>;
 	gyro-odr = <ICM45686_DT_GYRO_ODR_3200>;
 	fifo-watermark = <4>;
-	fifo-watermark-equals;
-};
-
-&icm45686_1 {
-	/* Configure to output 8-samples every 2.50-ms (400-Hz) */
-	accel-odr = <ICM45686_DT_ACCEL_ODR_3200>;
-	gyro-odr = <ICM45686_DT_GYRO_ODR_3200>;
-	fifo-watermark = <8>;
 	fifo-watermark-equals;
 };
 

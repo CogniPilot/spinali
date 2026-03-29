@@ -46,8 +46,7 @@ struct context {
 	struct k_thread thread_data;
 };
 
-/* Place context in SRAMX to save main RAM */
-static struct context g_ctx __attribute__((section("SRAMX.bss"))) = {
+static struct context g_ctx = {
 	.node = {},
 	.sub_vehicle_optical_flow = {},
 	.sub_vehicle_optical_flow_vel = {},
@@ -68,13 +67,11 @@ static int zenoh_session_init(struct context *ctx)
 
 	LOG_INF("Opening zenoh session to %s ...", locator);
 
+
 	do {
 		z_config_default(&config);
 		zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, mode);
-
-		if (locator[0] != '\0') {
-			zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, locator);
-		}
+		zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY, locator);
 
 		if (ret != 0) {
 			LOG_WRN("Unable to open session (ret=%d), retrying...", ret);
@@ -285,6 +282,6 @@ static int zenoh_sys_init(void)
 	return start(&g_ctx);
 }
 
-SYS_INIT(zenoh_sys_init, APPLICATION, 0);
+SYS_INIT(zenoh_sys_init, APPLICATION, 92);
 
 /* vi: ts=4 sw=4 et */

@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: 4ad28d86da70f6cf09239569dcb018a006c63de5 # main-with-patches 12/16/25
+      revision: spinali-optical-flow-v2
       import:
         - name-allowlist:
           - nanopb
@@ -59,7 +59,7 @@ manifest:
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
-      revision: 627f00aeea48f48885463542daf35068fb35726c # pr-mcuboot-mcxn-t1 01/03/26
+      revision: 627f00aeea48f48885463542daf35068fb35726c # pr-mcuboot-mcxn-t1
       path: modules/lib/zephyr_boards
     - name: hcdf_models
       remote: cognipilot
