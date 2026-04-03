@@ -14,3 +14,8 @@ west-commands:
       - name: tidy
         class: TidyCommand
         help: runs clang tidy
+  - file: scripts/release_command.py
+    commands:
+      - name: release_image
+        class: ReleaseCommand
+        help: Release firmware image to firmware_releases repository
