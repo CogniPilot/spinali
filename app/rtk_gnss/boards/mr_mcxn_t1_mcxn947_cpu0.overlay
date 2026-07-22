@@ -9,6 +9,7 @@
 	aliases {
 		imu-stream-0 = &icm45686_0;
 		mag-stream-0 = &rm3100_0;
+		mag-stream-1 = &bmm350_0;
 		gnss = &gnss1;
 	};
 };

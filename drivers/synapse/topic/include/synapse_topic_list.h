@@ -21,6 +21,7 @@
 #include <synapse_pb/odometry.pb.h>
 #include <synapse_pb/pwm.pb.h>
 #include <synapse_pb/quaternion.pb.h>
+#include <synapse_pb/rtcm3.pb.h>
 #include <synapse_pb/safety.pb.h>
 #include <synapse_pb/status.pb.h>
 #include <synapse_pb/twist.pb.h>
@@ -80,6 +81,7 @@ ZROS_TOPIC_DECLARE(optical_flow_raw, synapse_pb_PixartPAA3905);
 ZROS_TOPIC_DECLARE(orientation_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DECLARE(position_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DECLARE(pwm, synapse_pb_Pwm);
+ZROS_TOPIC_DECLARE(rtcm3, synapse_pb_Rtcm3);
 ZROS_TOPIC_DECLARE(safety, synapse_pb_Safety);
 ZROS_TOPIC_DECLARE(status, synapse_pb_Status);
 ZROS_TOPIC_DECLARE(velocity_sp, synapse_pb_Vector3);

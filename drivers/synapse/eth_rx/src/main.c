@@ -50,7 +50,10 @@ static void handle_frame(struct context *ctx)
 	struct zros_topic *topic = NULL;
 
 	// determine topic for data
-	if (frame->which_msg == synapse_pb_Frame_bezier_trajectory_tag) {
+	if (frame->which_msg == synapse_pb_Frame_rtcm3_tag) {
+		msg = &frame->msg.rtcm3;
+		topic = &topic_rtcm3;
+	} else if (frame->which_msg == synapse_pb_Frame_bezier_trajectory_tag) {
 		msg = &frame->msg.bezier_trajectory;
 		topic = &topic_bezier_trajectory_ethernet;
 	} else if (frame->which_msg == synapse_pb_Frame_clock_offset_tag) {

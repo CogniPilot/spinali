@@ -49,7 +49,7 @@ manifest:
       path: modules/lib/synapse_pb
     - name: zros_drivers
       remote: cognipilot
-      revision: e0b37b4ae5f03f9bc985bf6f00fce2aee16b8e84 # main 01/06/26
+      revision: e7260e2167f6347e06d56ed78d85fe69a2c70fda # fix/rtcm3-and-dual-mag (local, push before sharing)
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
