@@ -1,15 +1,15 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /* Copyright 2025 CogniPilot Foundation */
 
+#include <zephyr/dt-bindings/sensor/rm3100.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
 / {
 	aliases {
 		imu-stream-0 = &icm45686_0;
-		mag-stream-0 = &bmm350_0;
+		mag-stream-0 = &rm3100_0;
 		gnss = &gnss1;
-	};
-
-	chosen {
-		zephyr,rtk-serial = &flexcomm7_lpuart7;
 	};
 };
 
@@ -59,7 +59,10 @@
 	status = "disabled";
 };
 
-/* Reconfigure FlexCOMM3 from SPI (optical flow) to UART (GNSS) */
+/* Reconfigure FlexCOMM3 from SPI (optical flow) to UART.
+ * FC3 wires to the F9P's UART2 (TXD2/RXD2): spare / base-station RTCM
+ * output port. Kept enabled as a plain UART.
+ */
 &flexcomm3_lpspi3 {
 	status = "disabled";
 };
@@ -69,15 +72,9 @@
 	pinctrl-0 = <&pinmux_flexcomm3_lpuart>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
-
-	gnss1: gnss {
-		status = "okay";
-		compatible = "u-blox,f9p";
-		fix-rate = <100>;
-	};
 };
 
-/* GNSS Corrections Passthrough UART (FC7) */
+/* GNSS primary UART: FC7 wires to the F9P's UART1 (TXD1/RXD1). */
 &flexcomm7_lpspi7 {
 	status = "disabled";
 };
@@ -87,11 +84,39 @@
 	pinctrl-0 = <&pinmux_flexcomm7_lpuart>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
+
+	gnss1: gnss {
+		status = "okay";
+		compatible = "u-blox,f9p";
+		fix-rate = <100>;
+		initial-baudrate = <38400>;
+		reset-gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
+	};
 };
 
-/* Pinctrl for GNSS UARTs */
+/* PNI RM3100 magnetometer on FC4 (P1_8 SDA / P1_9 SCL, DRDY P1_22) */
+&flexcomm4 {
+	status = "okay";
+};
+
+&flexcomm4_lpi2c4 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexcomm4_lpi2c>;
+	pinctrl-names = "default";
+	clock-frequency = <I2C_BITRATE_FAST>;
+
+	rm3100_0: rm3100@20 {
+		status = "okay";
+		compatible = "pni,rm3100";
+		reg = <0x20>;
+		int-gpios = <&gpio1 22 GPIO_ACTIVE_HIGH>;
+		odr = <RM3100_DT_ODR_150>;
+	};
+};
+
+/* Pinctrl for GNSS UARTs and RM3100 I2C */
 &pinctrl {
-	/* GNSS Primary UART (F9P TXD1/RXD1) */
+	/* F9P UART2 (TXD2/RXD2): corrections/base output port */
 	pinmux_flexcomm3_lpuart: pinmux_flexcomm3_lpuart {
 		group0 {
 			pinmux = <FC3_P0_PIO1_0>,
@@ -102,7 +127,7 @@
 		};
 	};
 
-	/* GNSS Corrections UART (F9P TXD2/RXD2) */
+	/* GNSS primary UART (F9P TXD1/RXD1) */
 	pinmux_flexcomm7_lpuart: pinmux_flexcomm7_lpuart {
 		group0 {
 			pinmux = <FC7_P0_PIO3_2>,
@@ -111,5 +136,46 @@
 			drive-strength = "low";
 			input-enable;
 		};
+	};
+
+	/* RM3100 I2C (external pull-ups on hub) */
+	pinmux_flexcomm4_lpi2c: pinmux_flexcomm4_lpi2c {
+		group0 {
+			pinmux = <FC4_P0_PIO1_8>,
+				 <FC4_P1_PIO1_9>;
+			slew-rate = "fast";
+			drive-strength = "low";
+			drive-open-drain;
+			input-enable;
+		};
+	};
+};
+
+/* User buttons, GNSS fix LED, and F9P timepulse */
+/ {
+	gpio_keys {
+		compatible = "gpio-keys";
+		button_sw1: button_sw1 {
+			gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;
+			label = "SW1";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+		button_sw2: button_sw2 {
+			gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
+			label = "SW2";
+			zephyr,code = <INPUT_KEY_1>;
+		};
+	};
+
+	gnss_leds {
+		compatible = "gpio-leds";
+		led_gpsfix: led_gpsfix {
+			gpios = <&gpio3 9 GPIO_ACTIVE_HIGH>;
+			label = "GPSFIX";
+		};
+	};
+
+	zephyr,user {
+		timepulse-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
 	};
 };
