@@ -19,12 +19,14 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: spinali-optical-flow-v2
+      revision: 3e3c4c5da8a11d39557895b890562437a6387c76 # spinali-v4.4 (local, push before sharing)
       import:
         - name-allowlist:
           - nanopb
           - mbedtls
+          - tf-psa-crypto
           - hal_nxp
+          - hal_tdk
           - hal_afbr
           - cmsis
           - cmsis_6
@@ -35,7 +37,7 @@ manifest:
           - zcbor
     - name: zros
       remote: cognipilot
-      revision: 843348bca3a15e914914b90057369b9616302e20 # main 10/27/25
+      revision: 40ae3d68b0b9cf3f4ca4f5479cf9643c5b05a66b # fix/module-yml-v4.4 (local, push before sharing)
       path: modules/lib/zros
     - name: cyecca
       remote: cognipilot
@@ -43,23 +45,15 @@ manifest:
       path: modules/lib/cyecca
     - name: synapse_pb
       remote: cognipilot
-      revision: 44ebbd1ed65ace0e9f8efcaa502f464c92faa78b # main 12/10/25
+      revision: d14faa3fbce8ebe6412b252724ba3b47df1106c7 # main 12/16/25, adds Rtcm3
       path: modules/lib/synapse_pb
-    - name: hal_nxp
-      remote: cognipilot
-      revision: cf8f1631e862528ee044850bcc70273975b90771 # master 10/27/25
-      path: modules/hal/nxp
-    - name: hal_afbr
-      remote: zephyrproject-rtos
-      revision: 1abf6947457380934e27f92508ec5532ddedfc6d # add-blobs-for-fpu
-      path: modules/hal/afbr
     - name: zros_drivers
       remote: cognipilot
-      revision: fb7e9982a96c30541f60815ab8994a1fcdfb8f55 # main 12/16/25
+      revision: e0b37b4ae5f03f9bc985bf6f00fce2aee16b8e84 # main 01/06/26
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
-      revision: 627f00aeea48f48885463542daf35068fb35726c # pr-mcuboot-mcxn-t1
+      revision: 7aa5680d06a137e0294eeebb16596eee8c75617c # feature/v4.4-mr-mcxn-t1 (local, push before sharing)
       path: modules/lib/zephyr_boards
     - name: hcdf_models
       remote: cognipilot
@@ -67,7 +61,7 @@ manifest:
       path: modules/lib/hcdf_models
     - name: synapse_msgs_fbs
       url: https://github.com/CogniPilot/synapse_msgs_fbs.git
-      revision: 479a77710e7f2b5a94ce7f39f13e25d95364a59f # cerebri2
+      revision: 9ff3fa17530de20b6d008e1afdc3f4bcc33c0ba4 # local optical-flow schema (push before sharing; remote cerebri2 was force-pushed)
       path: modules/lib/synapse_msgs_fbs
     - name: zenoh-pico
       url: https://github.com/CogniPilot/zenoh-pico.git

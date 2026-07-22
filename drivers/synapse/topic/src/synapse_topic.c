@@ -85,7 +85,7 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 		(velocity_sp, &topic_velocity_sp, "velocity_sp"),                                  \
 		(wheel_odometry, &topic_wheel_odometry, "wheel_odometry")
 
-static void shell_callback(const struct shell *sh, uint8_t *data, size_t len)
+static void shell_callback(const struct shell *sh, uint8_t *data, size_t len, void *user_data)
 {
 	k_poll_signal_raise(&signal_quit, 1);
 }
@@ -195,7 +195,7 @@ static int topic_echo(const struct shell *sh, struct zros_topic *topic, void *ms
 	int rc = 0;
 
 	shell_print(sh, "press any key to exit");
-	shell_set_bypass(sh, shell_callback);
+	shell_set_bypass(sh, shell_callback, NULL);
 
 	while (true) {
 		// wait for new message, for 10 seconds
@@ -223,7 +223,7 @@ static int topic_echo(const struct shell *sh, struct zros_topic *topic, void *ms
 	}
 	zros_sub_fini(&sub);
 	zros_node_fini(&node);
-	shell_set_bypass(sh, NULL);
+	shell_set_bypass(sh, NULL, NULL);
 	return ZROS_OK;
 }
 
