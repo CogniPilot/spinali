@@ -99,6 +99,14 @@ Example usage:
             log.die(f'Build directory does not exist: {build_dir}')
 
         # Find the firmware binary
+        # Sysbuild: resolve the default domain dir via domains.yaml
+        domains_file = build_dir / 'domains.yaml'
+        if domains_file.exists():
+            import yaml
+            with open(domains_file) as f:
+                domains = yaml.safe_load(f)
+            build_dir = build_dir / domains['default']
+
         # MCUboot signed binary is preferred, otherwise use zephyr.bin
         zephyr_dir = build_dir / 'zephyr'
         if not zephyr_dir.exists():
