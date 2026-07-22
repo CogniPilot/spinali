@@ -5,22 +5,37 @@
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/i2c/i2c.h>
 
+/* Console on the FC1 UART (J5 debug connector). The board-level
+ * i3c_workaround moved the console to USB CDC to free FC1 for the BMM350;
+ * this app uses the shield RM3100 instead, so FC1 returns to UART.
+ */
+/delete-node/ &bmm350_0;
+
 / {
+	chosen {
+		zephyr,console = &flexcomm1_lpuart1;
+		zephyr,shell-uart = &flexcomm1_lpuart1;
+		zephyr,uart-mcumgr = &flexcomm1_lpuart1;
+	};
+
 	aliases {
 		imu-stream-0 = &icm45686_0;
 		mag-stream-0 = &rm3100_0;
-		mag-stream-1 = &bmm350_0;
 		gnss = &gnss1;
 	};
+};
+
+&flexcomm1_lpi2c1 {
+	status = "disabled";
+};
+
+&flexcomm1_lpuart1 {
+	status = "okay";
 };
 
 /* USB Shell IRQ priority lower than SPI IRQs */
 &zephyr_udc0 {
 	interrupts = <0x43 0x6>;
-};
-
-&bmm350_0 {
-	odr = "100";
 };
 
 #include <zephyr/dt-bindings/sensor/icm45686.h>

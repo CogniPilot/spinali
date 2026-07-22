@@ -10,3 +10,10 @@
 &flexcomm1_lpuart1 {
 	status = "okay";
 };
+
+/* Bootloader console on the same debug-port UART as the application */
+/ {
+	chosen {
+		zephyr,console = &flexcomm1_lpuart1;
+	};
+};
