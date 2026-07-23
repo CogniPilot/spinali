@@ -1,0 +1,27 @@
+# Copyright (c) 2026, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "CogniPilot - SPINALI - CAN over Ethernet"
+menu "Zephyr"
+source "Kconfig.zephyr"
+endmenu
+
+menu "COE"
+
+config SPINALI_COE_PEER_ADDR
+  string "Default peer IPv4 address for CAN over Ethernet"
+  default "192.0.2.2"
+  help
+    Cannelloni frames from each CAN bus are sent to this address until a
+    peer sends a datagram, after which the sender address is used.
+
+config SPINALI_COE_PORT_BASE
+  int "UDP base port"
+  default 20000
+  help
+    Bus N listens on and transmits to UDP port PORT_BASE + N.
+
+module = SPINALI_COE
+module-str = spinali_coe
+source "subsys/logging/Kconfig.template.log_config"
+endmenu

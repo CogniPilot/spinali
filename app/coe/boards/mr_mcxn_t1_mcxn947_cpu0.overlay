@@ -1,0 +1,36 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright 2026 CogniPilot Foundation */
+
+/* Console on the FC1 UART (J5 debug connector); the hub BMM350 and its
+ * I2C bus are unused by this app.
+ */
+/delete-node/ &bmm350_0;
+
+/ {
+	chosen {
+		zephyr,console = &flexcomm1_lpuart1;
+		zephyr,shell-uart = &flexcomm1_lpuart1;
+		zephyr,uart-mcumgr = &flexcomm1_lpuart1;
+	};
+
+	aliases {
+		coe-can0 = &flexcan0;
+		coe-can1 = &flexcan1;
+	};
+};
+
+&flexcomm1_lpi2c1 {
+	status = "disabled";
+};
+
+&flexcomm1_lpuart1 {
+	status = "okay";
+};
+
+&flexcan0 {
+	status = "okay";
+};
+
+&flexcan1 {
+	status = "okay";
+};

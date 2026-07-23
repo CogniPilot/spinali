@@ -1,0 +1,19 @@
+/* MCUboot overlay for MR-MCXN-T1 */
+
+/ {
+	chosen {
+		zephyr,code-partition = &boot_partition;
+	};
+};
+
+/* Enable UART to pull in lpflexcomm driver (needed for MFD) */
+&flexcomm1_lpuart1 {
+	status = "okay";
+};
+
+/* Bootloader console on the same debug-port UART as the application */
+/ {
+	chosen {
+		zephyr,console = &flexcomm1_lpuart1;
+	};
+};
