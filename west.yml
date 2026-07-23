@@ -65,5 +65,5 @@ manifest:
       path: modules/lib/synapse_msgs_fbs
     - name: zenoh-pico
       url: https://github.com/CogniPilot/zenoh-pico.git
-      revision: spinali-kconfig-guards
+      revision: ab0db45cbb5f7dbf56e4f9fc8e783540f4795e4b # spinali-kconfig-guards (local, push before sharing)
       path: modules/lib/zenoh-pico
