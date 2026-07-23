@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: aab31f95e490291876cdaf656a97dd98450ecbca # spinali-main (local, push before sharing)
+      revision: 96042952dd55b58d8e62ea189ad83eba790b5400 # spinali-main (local, push before sharing)
       import:
         - name-allowlist:
           - nanopb
