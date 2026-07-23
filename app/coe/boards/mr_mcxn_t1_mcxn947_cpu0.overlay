@@ -27,6 +27,10 @@
 	status = "okay";
 };
 
+&enet_ptp_clock {
+	status = "okay";
+};
+
 &flexcan0 {
 	status = "okay";
 };

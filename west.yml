@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: 3e3c4c5da8a11d39557895b890562437a6387c76 # spinali-v4.4 (local, push before sharing)
+      revision: aab31f95e490291876cdaf656a97dd98450ecbca # spinali-main (local, push before sharing)
       import:
         - name-allowlist:
           - nanopb
@@ -53,7 +53,7 @@ manifest:
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
-      revision: 7aa5680d06a137e0294eeebb16596eee8c75617c # feature/v4.4-mr-mcxn-t1 (local, push before sharing)
+      revision: da960ebea1265e6a66a7681890e1a78f6e9bccb0 # feature/v4.4-mr-mcxn-t1 (local, push before sharing)
       path: modules/lib/zephyr_boards
     - name: hcdf_models
       remote: cognipilot
