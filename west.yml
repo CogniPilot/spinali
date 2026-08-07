@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: 96042952dd55b58d8e62ea189ad83eba790b5400 # spinali-main (local, push before sharing)
+      revision: cb86e25cfbd57d3b8d15fceaa94cba088cff3c0c # spinali-main
       import:
         - name-allowlist:
           - nanopb
@@ -53,7 +53,7 @@ manifest:
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
-      revision: da960ebea1265e6a66a7681890e1a78f6e9bccb0 # feature/v4.4-mr-mcxn-t1 (local, push before sharing)
+      revision: 7fea234ee9890e0b980d4fca9c595615994d5d28 # feature/v4.4-mr-mcxn-t1
       path: modules/lib/zephyr_boards
     - name: hcdf_models
       remote: cognipilot
@@ -65,5 +65,5 @@ manifest:
       path: modules/lib/synapse_msgs_fbs
     - name: zenoh-pico
       url: https://github.com/CogniPilot/zenoh-pico.git
-      revision: ab0db45cbb5f7dbf56e4f9fc8e783540f4795e4b # spinali-kconfig-guards (local, push before sharing)
+      revision: 5b6a986dca0eaaf8a0532087fdecd6c14412a0c6 # spinali-kconfig-guards
       path: modules/lib/zenoh-pico
