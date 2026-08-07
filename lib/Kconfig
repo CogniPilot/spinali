@@ -4,5 +4,6 @@
 menu "Libraries"
 
 rsource "core/Kconfig"
+rsource "timing/Kconfig"
 
 endmenu

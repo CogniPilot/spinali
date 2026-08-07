@@ -1,0 +1,33 @@
+# Copyright (c) 2026, CogniPilot Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig SPINALI_TIMING
+  bool "Enable GNSS time discipline"
+  default n
+  depends on GNSS_U_BLOX_F9P_TIMEPULSE
+  depends on COUNTER_CAPTURE
+  depends on PTP_CLOCK
+  depends on NET_GPTP
+  help
+    Discipline the Ethernet MAC PTP hardware clock (PHC) to GNSS time.
+    A hardware capture of the receiver TIMEPULSE edge is paired with the
+    UBX-TIM-TP label of that edge and fed to a 1 Hz PI servo that steers
+    the PHC, which also serves gPTP. The servo owns the announced
+    grandmaster quality and the UTC/leap time properties, so the node
+    advertises GNSS traceability only while it holds it.
+
+if SPINALI_TIMING
+
+config SPINALI_TIMING_TM_AUDIT
+  bool "Enable the grandmaster absolute-accuracy audit"
+  default y
+  depends on GPIO
+  help
+    Drive a GPIO wired to the receiver EXTINT input at a precisely
+    measured PHC time and compare it with the UBX-TIM-TM2 timestamp the
+    receiver reports for that same edge. This measures absolute PHC
+    versus GNSS error end to end through the hardware, independently of
+    the discipline servo. Requires a timemark-gpios property on the
+    zephyr,user devicetree node.
+
+endif # SPINALI_TIMING

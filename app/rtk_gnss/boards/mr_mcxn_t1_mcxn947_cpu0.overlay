@@ -121,10 +121,13 @@
 	pinctrl-names = "default";
 	clock-frequency = <I2C_BITRATE_FAST>;
 
-	rm3100_0: rm3100@20 {
+	/* Address 0x23: SA0 (SSN) and SA1 (MISO) are unconnected on the
+	 * shield and float high via the chip's internal pulls.
+	 */
+	rm3100_0: rm3100@23 {
 		status = "okay";
 		compatible = "pni,rm3100";
-		reg = <0x20>;
+		reg = <0x23>;
 		int-gpios = <&gpio1 22 GPIO_ACTIVE_HIGH>;
 		odr = <RM3100_DT_ODR_150>;
 	};
@@ -165,9 +168,51 @@
 			input-enable;
 		};
 	};
+
+	/* F9P TIMEPULSE on P3_8 as CTIMER capture input (CT_INP4) */
+	pinmux_ctimer_pps: pinmux_ctimer_pps {
+		group0 {
+			pinmux = <CT_INP4_PIO3_8>;
+			slew-rate = "fast";
+			drive-strength = "low";
+			input-enable;
+		};
+	};
 };
 
-/* User buttons, GNSS fix LED, and F9P timepulse */
+/* INPUTMUX: routes CT_INP4 onto CTIMER4 capture channel 0. The SoC
+ * dtsi does not model this peripheral; offset 0x6000 in the peripheral
+ * space (0x50006000 secure alias).
+ */
+&peripheral {
+	inputmux0: inputmux@6000 {
+		compatible = "nxp,inputmux";
+		reg = <0x6000 0x1000>;
+		#inputmux-cells = <2>;
+	};
+};
+
+/* CTIMER4 hardware-captures the F9P TIMEPULSE edge. board.c attaches
+ * PLL0 (150 MHz, div 1) when this node is enabled - the same clock
+ * domain as the ENET QoS PTP reference, so captured ticks translate
+ * exactly to PHC time. 0x1C000004 = kINPUTMUX_CtimerInp4ToTimer4Captsel.
+ */
+&ctimer4 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_ctimer_pps>;
+	pinctrl-names = "default";
+	inputmux-connections = <&inputmux0 0 0x1C000004>;
+};
+
+/* ENET QoS PTP hardware clock (PHC): the clock being disciplined. */
+&enet_ptp_clock {
+	status = "okay";
+};
+
+/* User buttons and GNSS fix LED. (The F9P timepulse on P3_8 is muxed
+ * to CT_INP4 for CTIMER capture - see pinmux_ctimer_pps/&ctimer4 -
+ * not claimed as a GPIO.)
+ */
 / {
 	gpio_keys {
 		compatible = "gpio-keys";
@@ -191,7 +236,12 @@
 		};
 	};
 
+	/* P3_0 reaches the F9P's EXTINT input through a 0R link on the
+	 * shield. Driven as a plain output (idle low, pulsed high) to
+	 * mark a PHC-timed edge the receiver timestamps in GNSS time,
+	 * which measures absolute grandmaster error.
+	 */
 	zephyr,user {
-		timepulse-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
+		timemark-gpios = <&gpio3 0 GPIO_ACTIVE_HIGH>;
 	};
 };
