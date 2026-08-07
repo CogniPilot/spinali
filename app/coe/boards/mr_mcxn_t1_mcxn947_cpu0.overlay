@@ -16,6 +16,7 @@
 	aliases {
 		coe-can0 = &flexcan0;
 		coe-can1 = &flexcan1;
+		gnss = &gnss1;
 	};
 };
 
@@ -27,14 +28,104 @@
 	status = "okay";
 };
 
-&enet_ptp_clock {
-	status = "okay";
-};
-
 &flexcan0 {
 	status = "okay";
 };
 
 &flexcan1 {
 	status = "okay";
+};
+
+/* GNSS primary UART: FC7 wires to the F9P's UART1 (TXD1/RXD1), which
+ * carries the UBX timing messages the discipline servo pairs with the
+ * captured TIMEPULSE edge. FC7 is SPI on the optical flow board, so the
+ * SPI instance and the sensor behind it are disabled here.
+ */
+&flexcomm7_lpspi7 {
+	status = "disabled";
+};
+
+&icm45686_1 {
+	status = "disabled";
+};
+
+&flexcomm7_lpuart7 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_flexcomm7_lpuart>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+
+	gnss1: gnss {
+		status = "okay";
+		compatible = "u-blox,f9p";
+		fix-rate = <100>;
+		initial-baudrate = <38400>;
+		reset-gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&pinctrl {
+	/* GNSS primary UART (F9P TXD1/RXD1) */
+	pinmux_flexcomm7_lpuart: pinmux_flexcomm7_lpuart {
+		group0 {
+			pinmux = <FC7_P0_PIO3_2>,
+				 <FC7_P1_PIO3_3>;
+			slew-rate = "fast";
+			drive-strength = "low";
+			input-enable;
+		};
+	};
+
+	/* F9P TIMEPULSE on P3_8 as CTIMER capture input (CT_INP4) */
+	pinmux_ctimer_pps: pinmux_ctimer_pps {
+		group0 {
+			pinmux = <CT_INP4_PIO3_8>;
+			slew-rate = "fast";
+			drive-strength = "low";
+			input-enable;
+		};
+	};
+};
+
+/* INPUTMUX: routes CT_INP4 onto CTIMER4 capture channel 0. The SoC
+ * dtsi does not model this peripheral; offset 0x6000 in the peripheral
+ * space (0x50006000 secure alias).
+ */
+&peripheral {
+	inputmux0: inputmux@6000 {
+		compatible = "nxp,inputmux";
+		reg = <0x6000 0x1000>;
+		#inputmux-cells = <2>;
+	};
+};
+
+/* CTIMER4 hardware-captures the F9P TIMEPULSE edge. board.c attaches
+ * PLL0 (150 MHz, div 1) when this node is enabled - the same clock
+ * domain as the ENET QoS PTP reference, so captured ticks translate
+ * exactly to PHC time. 0x1C000004 = kINPUTMUX_CtimerInp4ToTimer4Captsel.
+ */
+&ctimer4 {
+	status = "okay";
+	pinctrl-0 = <&pinmux_ctimer_pps>;
+	pinctrl-names = "default";
+	inputmux-connections = <&inputmux0 0 0x1C000004>;
+};
+
+/* ENET QoS PTP hardware clock (PHC): the clock disciplined to GNSS,
+ * served to the network by gPTP, and sampled to timestamp every CAN
+ * frame bridged toward Ethernet.
+ */
+&enet_ptp_clock {
+	status = "okay";
+};
+
+/* P3_0 reaches the F9P's EXTINT input through a 0R link on the shield.
+ * Driven as a plain output (idle low, pulsed high) to mark a PHC-timed
+ * edge the receiver timestamps in GNSS time, which measures absolute
+ * grandmaster error.
+ */
+/ {
+	zephyr,user {
+		timemark-gpios = <&gpio3 0 GPIO_ACTIVE_HIGH>;
+	};
 };
