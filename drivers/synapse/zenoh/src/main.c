@@ -222,13 +222,11 @@ static void zenoh_run(void *p0, void *p1, void *p2)
 			LOG_DBG("poll timeout");
 		}
 
-		if (zros_sub_update_available(&ctx->sub_vehicle_optical_flow)) {
-			zros_sub_update(&ctx->sub_vehicle_optical_flow);
+		if (zros_sub_update(&ctx->sub_vehicle_optical_flow) == 0) {
 			publish_flow(ctx);
 		}
 
-		if (zros_sub_update_available(&ctx->sub_vehicle_optical_flow_vel)) {
-			zros_sub_update(&ctx->sub_vehicle_optical_flow_vel);
+		if (zros_sub_update(&ctx->sub_vehicle_optical_flow_vel) == 0) {
 			publish_flow_vel(ctx);
 		}
 	}

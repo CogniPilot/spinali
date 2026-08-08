@@ -239,43 +239,35 @@ static void eth_tx_run(void *p0, void *p1, void *p2)
 			LOG_DBG("poll timeout");
 		}
 
-		if (zros_sub_update_available(&ctx->sub_actuators)) {
-			zros_sub_update(&ctx->sub_actuators);
+		if (zros_sub_update(&ctx->sub_actuators) == 0) {
 			send_frame(ctx, synapse_pb_Frame_actuators_tag);
 		}
 
-		if (zros_sub_update_available(&ctx->sub_argus)) {
-			zros_sub_update(&ctx->sub_argus);
+		if (zros_sub_update(&ctx->sub_argus) == 0) {
 			send_frame(ctx, synapse_pb_Frame_argus_results_tag);
 		}
 
-		if (zros_sub_update_available(&ctx->sub_imu)) {
-			zros_sub_update(&ctx->sub_imu);
+		if (zros_sub_update(&ctx->sub_imu) == 0) {
 			send_frame(ctx, synapse_pb_Frame_imu_tag);
 		}
 
-		if (zros_sub_update_available(&ctx->sub_magnetic_field)) {
-			zros_sub_update(&ctx->sub_magnetic_field);
+		if (zros_sub_update(&ctx->sub_magnetic_field) == 0) {
 			send_frame(ctx, synapse_pb_Frame_magnetic_field_tag);
 		}
 
-		if (zros_sub_update_available(&ctx->sub_nav_sat_fix)) {
-			zros_sub_update(&ctx->sub_nav_sat_fix);
+		if (zros_sub_update(&ctx->sub_nav_sat_fix) == 0) {
 			send_frame(ctx, synapse_pb_Frame_nav_sat_fix_tag);
 		}
 
-		if (zros_sub_update_available(&ctx->sub_status)) {
-			zros_sub_update(&ctx->sub_status);
+		if (zros_sub_update(&ctx->sub_status) == 0) {
 			send_frame(ctx, synapse_pb_Frame_status_tag);
 		}
 
-		if (zros_sub_update_available(&ctx->sub_odometry_estimator)) {
-			zros_sub_update(&ctx->sub_odometry_estimator);
+		if (zros_sub_update(&ctx->sub_odometry_estimator) == 0) {
 			send_frame(ctx, synapse_pb_Frame_odometry_tag);
 		}
 
-		if (zros_sub_update_available(&ctx->sub_optical_flow_raw)) {
-			zros_sub_update(&ctx->sub_optical_flow_raw);
+		if (zros_sub_update(&ctx->sub_optical_flow_raw) == 0) {
 			send_frame(ctx, synapse_pb_Frame_pixart_paa3905_tag);
 		}
 

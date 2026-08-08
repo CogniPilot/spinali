@@ -507,20 +507,17 @@ static void vof_run(void *p0, void *p1, void *p2)
 		}
 
 		/* buffer gyro samples */
-		if (zros_sub_update_available(&ctx->sub_imu)) {
-			zros_sub_update(&ctx->sub_imu);
+		if (zros_sub_update(&ctx->sub_imu) == 0) {
 			update_gyro_buffer(ctx);
 		}
 
 		/* buffer range samples */
-		if (zros_sub_update_available(&ctx->sub_argus)) {
-			zros_sub_update(&ctx->sub_argus);
+		if (zros_sub_update(&ctx->sub_argus) == 0) {
 			update_range_buffer(ctx);
 		}
 
 		/* process optical flow */
-		if (zros_sub_update_available(&ctx->sub_optical_flow_raw)) {
-			zros_sub_update(&ctx->sub_optical_flow_raw);
+		if (zros_sub_update(&ctx->sub_optical_flow_raw) == 0) {
 			process_optical_flow(ctx);
 		}
 	}

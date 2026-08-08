@@ -125,14 +125,12 @@ static int topic_count_hz(const struct shell *sh, struct zros_topic *topic, void
 		elapsed_ticks = k_uptime_ticks() - ticks_start;
 		ticks_remaining = ticks_sample - elapsed_ticks;
 
-		if (zros_sub_update_available(&sub)) {
-			rc = zros_sub_update(&sub);
-			if (rc == 0) {
-				msg_tick[msg_count] = k_uptime_ticks();
-				msg_count++;
-			} else {
-				LOG_ERR("sub update failed");
-			}
+		rc = zros_sub_update(&sub);
+		if (rc == 0) {
+			msg_tick[msg_count] = k_uptime_ticks();
+			msg_count++;
+		} else if (rc != -EAGAIN) {
+			LOG_ERR("sub update failed");
 		}
 	}
 
@@ -211,11 +209,10 @@ static int topic_echo(const struct shell *sh, struct zros_topic *topic, void *ms
 			if (quit_signaled) {
 				break;
 			}
-			if (!zros_sub_update_available(&sub)) {
+			if (zros_sub_update(&sub) != 0) {
 				LOG_WRN("%s no update available.", name);
 				break;
 			} else {
-				zros_sub_update(&sub);
 				echo(buf, sizeof(buf), msg);
 				shell_print(sh, "%s", buf);
 			}
