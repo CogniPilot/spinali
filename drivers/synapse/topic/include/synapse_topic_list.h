@@ -28,8 +28,8 @@
 #include <synapse_pb/vector3.pb.h>
 #include <synapse_pb/wheel_odometry.pb.h>
 
-#ifdef CONFIG_SPINALI_SYNAPSE_ZENOH
-#include "synapse_optical_flow_reader.h"
+#if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) || defined(CONFIG_SPINALI_SYNAPSE_ZENOH)
+#include "synapse_optical_flow_topic.h"
 #endif
 
 /********************************************************************
@@ -85,9 +85,9 @@ ZROS_TOPIC_DECLARE(rtcm3, synapse_pb_Rtcm3);
 ZROS_TOPIC_DECLARE(safety, synapse_pb_Safety);
 ZROS_TOPIC_DECLARE(status, synapse_pb_Status);
 ZROS_TOPIC_DECLARE(velocity_sp, synapse_pb_Vector3);
-#ifdef CONFIG_SPINALI_SYNAPSE_ZENOH
-ZROS_TOPIC_DECLARE(vehicle_optical_flow, synapse_topic_VehicleOpticalFlowData_t);
-ZROS_TOPIC_DECLARE(vehicle_optical_flow_vel, synapse_topic_VehicleOpticalFlowVelData_t);
+#if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) || defined(CONFIG_SPINALI_SYNAPSE_ZENOH)
+ZROS_TOPIC_DECLARE(optical_flow, synapse_topic_OpticalFlowData_t);
+ZROS_TOPIC_DECLARE(optical_flow_vel, synapse_topic_OpticalFlowVelocityData_t);
 #endif
 ZROS_TOPIC_DECLARE(wheel_odometry, synapse_pb_WheelOdometry);
 

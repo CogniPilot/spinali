@@ -214,9 +214,9 @@ ZROS_TOPIC_DEFINE(rtcm3, synapse_pb_Rtcm3);
 ZROS_TOPIC_DEFINE(safety, synapse_pb_Safety);
 ZROS_TOPIC_DEFINE(status, synapse_pb_Status);
 ZROS_TOPIC_DEFINE(velocity_sp, synapse_pb_Vector3);
-#ifdef CONFIG_SPINALI_SYNAPSE_ZENOH
-ZROS_TOPIC_DEFINE(vehicle_optical_flow, synapse_topic_VehicleOpticalFlowData_t);
-ZROS_TOPIC_DEFINE(vehicle_optical_flow_vel, synapse_topic_VehicleOpticalFlowVelData_t);
+#if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) || defined(CONFIG_SPINALI_SYNAPSE_ZENOH)
+ZROS_TOPIC_DEFINE(optical_flow, synapse_topic_OpticalFlowData_t);
+ZROS_TOPIC_DEFINE(optical_flow_vel, synapse_topic_OpticalFlowVelocityData_t);
 #endif
 ZROS_TOPIC_DEFINE(wheel_odometry, synapse_pb_WheelOdometry);
 
@@ -250,9 +250,9 @@ static struct zros_topic *topic_list[] = {
 	&topic_odometry_ethernet,
 	&topic_orientation_sp,
 	&topic_optical_flow_raw,
-#ifdef CONFIG_SPINALI_SYNAPSE_ZENOH
-	&topic_vehicle_optical_flow,
-	&topic_vehicle_optical_flow_vel,
+#if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) || defined(CONFIG_SPINALI_SYNAPSE_ZENOH)
+	&topic_optical_flow,
+	&topic_optical_flow_vel,
 #endif
 	&topic_position_sp,
 	&topic_pwm,

@@ -47,11 +47,11 @@ struct context {
 	synapse_pb_Imu imu;
 	synapse_pb_ArgusResults argus;
 	/* publications */
-	struct zros_pub pub_vehicle_optical_flow;
-	struct zros_pub pub_vehicle_optical_flow_vel;
+	struct zros_pub pub_optical_flow;
+	struct zros_pub pub_optical_flow_vel;
 	/* publication data */
-	synapse_topic_VehicleOpticalFlowData_t vehicle_flow;
-	synapse_topic_VehicleOpticalFlowVelData_t vehicle_flow_vel;
+	synapse_topic_OpticalFlowData_t optical_flow;
+	synapse_topic_OpticalFlowVelocityData_t optical_flow_vel;
 	/* processing state */
 	struct integrator_coning gyro_integrator;
 	struct gyro_ring_buffer gyro_buffer;
@@ -81,10 +81,10 @@ static struct context g_ctx = {
 	.optical_flow_raw = {},
 	.imu = {},
 	.argus = {},
-	.pub_vehicle_optical_flow = {},
-	.pub_vehicle_optical_flow_vel = {},
-	.vehicle_flow = {},
-	.vehicle_flow_vel = {},
+	.pub_optical_flow = {},
+	.pub_optical_flow_vel = {},
+	.optical_flow = {},
+	.optical_flow_vel = {},
 	.gyro_integrator = {},
 	.gyro_buffer = {},
 	.range_buffer = {},
@@ -328,12 +328,12 @@ static void process_optical_flow(struct context *ctx)
 		return;
 	}
 
-	/* --- publish vehicle_optical_flow --- */
-	synapse_topic_VehicleOpticalFlowData_t *vof = &ctx->vehicle_flow;
+	/* --- publish optical_flow --- */
+	synapse_topic_OpticalFlowData_t *vof = &ctx->optical_flow;
 
 	memset(vof, 0, sizeof(*vof));
 
-	vof->timestamp_us = timestamp_us;
+	vof->timestamp_us = (uint64_t)timestamp_us;
 
 	/* apply scale */
 	float scaled_flow[2] = {
@@ -344,13 +344,13 @@ static void process_optical_flow(struct context *ctx)
 	/* apply rotation */
 	apply_rotation(&scaled_flow[0], &scaled_flow[1], CONFIG_VOF_ROT);
 
-	vof->pixel_flow.x = scaled_flow[0];
-	vof->pixel_flow.y = scaled_flow[1];
-	vof->delta_angle.x = ctx->delta_angle[0];
-	vof->delta_angle.y = ctx->delta_angle[1];
-	vof->delta_angle.z = ctx->delta_angle[2];
+	vof->flow_rad.x = scaled_flow[0];
+	vof->flow_rad.y = scaled_flow[1];
+	vof->delta_angle_flu_rad.x = ctx->delta_angle[0];
+	vof->delta_angle_flu_rad.y = ctx->delta_angle[1];
+	vof->delta_angle_flu_rad.z = ctx->delta_angle[2];
 	vof->integration_timespan_us = ctx->integration_timespan_us;
-	vof->quality = (uint8_t)(ctx->quality_sum / ctx->accumulated_count);
+	vof->quality_pct = (uint8_t)(ctx->quality_sum / ctx->accumulated_count);
 
 	if (ctx->distance_sum_count > 0 && isfinite(ctx->distance_sum)) {
 		vof->distance_m = ctx->distance_sum / (float)ctx->distance_sum_count;
@@ -358,21 +358,21 @@ static void process_optical_flow(struct context *ctx)
 		vof->distance_m = NAN;
 	}
 
-	vof->max_flow_rate = VOF_MAXR;
-	vof->min_ground_distance = VOF_MINHGT;
-	vof->max_ground_distance = VOF_MAXHGT;
+	vof->max_flow_rate_rad_s = VOF_MAXR;
+	vof->min_ground_distance_m = VOF_MINHGT;
+	vof->max_ground_distance_m = VOF_MAXHGT;
 
-	zros_pub_update(&ctx->pub_vehicle_optical_flow);
+	zros_pub_update(&ctx->pub_optical_flow);
 
-	/* --- publish vehicle_optical_flow_vel if distance available --- */
+	/* --- publish optical_flow_vel if distance available --- */
 	if (ctx->distance_sum_count > 0 && isfinite(ctx->distance_sum)) {
 		float range = ctx->distance_sum / (float)ctx->distance_sum_count;
 		float flow_dt = 1e-6f * (float)ctx->integration_timespan_us;
 
-		synapse_topic_VehicleOpticalFlowVelData_t *vel = &ctx->vehicle_flow_vel;
+		synapse_topic_OpticalFlowVelocityData_t *vel = &ctx->optical_flow_vel;
 
 		memset(vel, 0, sizeof(*vel));
-		vel->timestamp_us = timestamp_us;
+		vel->timestamp_us = (uint64_t)timestamp_us;
 
 		if (flow_dt > 1e-6f) {
 			/*
@@ -392,26 +392,26 @@ static void process_optical_flow(struct context *ctx)
 			};
 
 			/* velocity in body frame */
-			vel->vel_body.x = -range * flow_compensated[1] / flow_dt;
-			vel->vel_body.y = range * flow_compensated[0] / flow_dt;
+			vel->velocity_flu_m_s.x = -range * flow_compensated[1] / flow_dt;
+			vel->velocity_flu_m_s.y = range * flow_compensated[0] / flow_dt;
 
-			/* NE frame velocity - requires attitude, set NAN for now */
-			vel->vel_ne.x = NAN;
-			vel->vel_ne.y = NAN;
+			/* ENU frame velocity - requires attitude, set NAN for now */
+			vel->velocity_enu_m_s.x = NAN;
+			vel->velocity_enu_m_s.y = NAN;
 
 			/* flow rates */
-			vel->flow_rate_uncompensated.x = flow_xy_rad[0] / flow_dt;
-			vel->flow_rate_uncompensated.y = flow_xy_rad[1] / flow_dt;
-			vel->flow_rate_compensated.x = flow_compensated[0] / flow_dt;
-			vel->flow_rate_compensated.y = flow_compensated[1] / flow_dt;
+			vel->flow_rate_uncompensated_rad_s.x = flow_xy_rad[0] / flow_dt;
+			vel->flow_rate_uncompensated_rad_s.y = flow_xy_rad[1] / flow_dt;
+			vel->flow_rate_compensated_rad_s.x = flow_compensated[0] / flow_dt;
+			vel->flow_rate_compensated_rad_s.y = flow_compensated[1] / flow_dt;
 
 			/* gyro rate */
-			vel->gyro_rate.x = gyro_rate_integral[0] / flow_dt;
-			vel->gyro_rate.y = gyro_rate_integral[1] / flow_dt;
-			vel->gyro_rate.z = gyro_rate_integral[2] / flow_dt;
+			vel->gyro_flu_rad_s.x = gyro_rate_integral[0] / flow_dt;
+			vel->gyro_flu_rad_s.y = gyro_rate_integral[1] / flow_dt;
+			vel->gyro_flu_rad_s.z = gyro_rate_integral[2] / flow_dt;
 		}
 
-		zros_pub_update(&ctx->pub_vehicle_optical_flow_vel);
+		zros_pub_update(&ctx->pub_optical_flow_vel);
 	}
 
 	clear_accumulated_data(ctx);
@@ -442,17 +442,17 @@ static int vof_init(struct context *ctx)
 		return ret;
 	}
 
-	ret = zros_pub_init(&ctx->pub_vehicle_optical_flow, &ctx->node,
-			    &topic_vehicle_optical_flow, &ctx->vehicle_flow);
+	ret = zros_pub_init(&ctx->pub_optical_flow, &ctx->node, &topic_optical_flow,
+			    &ctx->optical_flow);
 	if (ret < 0) {
-		LOG_ERR("init pub vehicle_optical_flow failed: %d", ret);
+		LOG_ERR("init pub optical_flow failed: %d", ret);
 		return ret;
 	}
 
-	ret = zros_pub_init(&ctx->pub_vehicle_optical_flow_vel, &ctx->node,
-			    &topic_vehicle_optical_flow_vel, &ctx->vehicle_flow_vel);
+	ret = zros_pub_init(&ctx->pub_optical_flow_vel, &ctx->node, &topic_optical_flow_vel,
+			    &ctx->optical_flow_vel);
 	if (ret < 0) {
-		LOG_ERR("init pub vehicle_optical_flow_vel failed: %d", ret);
+		LOG_ERR("init pub optical_flow_vel failed: %d", ret);
 		return ret;
 	}
 
@@ -471,8 +471,8 @@ static int vof_fini(struct context *ctx)
 	zros_sub_fini(&ctx->sub_optical_flow_raw);
 	zros_sub_fini(&ctx->sub_imu);
 	zros_sub_fini(&ctx->sub_argus);
-	zros_pub_fini(&ctx->pub_vehicle_optical_flow);
-	zros_pub_fini(&ctx->pub_vehicle_optical_flow_vel);
+	zros_pub_fini(&ctx->pub_optical_flow);
+	zros_pub_fini(&ctx->pub_optical_flow_vel);
 	zros_node_fini(&ctx->node);
 	k_sem_give(&ctx->running);
 	LOG_INF("fini");

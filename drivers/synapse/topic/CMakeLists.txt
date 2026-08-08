@@ -5,9 +5,6 @@ zephyr_library_named(spinali_synapse_topic)
 
 zephyr_library_include_directories(include)
 zephyr_include_directories(include)
-if(SYNAPSE_FLATBUFFER_GENERATED_DIR)
-  zephyr_library_include_directories(${SYNAPSE_FLATBUFFER_GENERATED_DIR})
-endif()
 
 zephyr_library_sources(
   src/synapse_shell_print.c

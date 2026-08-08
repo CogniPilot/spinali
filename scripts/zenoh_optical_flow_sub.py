@@ -1,146 +1,171 @@
 #!/usr/bin/env python3
 """
-Subscribe to zenoh optical flow topics and print decoded FlatBuffer data.
-Requires: pip install eclipse-zenoh flatbuffers
+Subscribe to the synapse optical flow topics and print the decoded structs.
+Requires: pip install eclipse-zenoh
+
+Payloads are raw fixed-layout little-endian structs from the synapse_fbs
+v0.7.0 catalog, tagged with the value contract asserted below. Anything whose
+contract does not match is reported rather than decoded, because the payload
+carries no self-description that would let us notice a layout change.
 
 Start zenohd first:
-  zenohd --listen udp/192.0.2.2:7447
+  zenohd --listen tcp/192.0.2.2:7447
 """
 
+import argparse
 import struct
-import sys
 import time
 
 import zenoh
 
+FLOW_CONTRACT = (
+    "application/x-synapse-struct;type=synapse.topic.OpticalFlowData;"
+    "schema=sha256-128:e880efa8756c9c6c7938d1fbf3b03fc8"
+)
+FLOW_VEL_CONTRACT = (
+    "application/x-synapse-struct;type=synapse.topic.OpticalFlowVelocityData;"
+    "schema=sha256-128:5505d8e94ad10e80320320e3658734fa"
+)
 
-def decode_vehicle_optical_flow(payload: bytes):
-    """Decode VehicleOpticalFlow FlatBuffer table.
+# OpticalFlowData: timestamp_us@0 flow_rad@8 delta_angle_flu_rad@16 distance_m@28
+# integration_timespan_us@32 max_flow_rate_rad_s@36 min_ground_distance_m@40
+# max_ground_distance_m@44 quality_pct@48, 56 bytes total.
+FLOW_FORMAT = "<Q2f3ffI3fB7x"
 
-    Layout: [root_offset:4][vtable:8][table_body: soffset:4 + struct:56]
-    Struct VehicleOpticalFlowData (56 bytes):
-      int64  timestamp_us
-      float  pixel_flow.x, pixel_flow.y
-      float  delta_angle.x, delta_angle.y, delta_angle.z
-      float  distance_m
-      uint32 integration_timespan_us
-      uint8  quality
-      3 bytes padding
-      float  max_flow_rate
-      float  min_ground_distance
-      float  max_ground_distance
-    """
-    if len(payload) < 72:
+# OpticalFlowVelocityData: timestamp_us@0 velocity_flu_m_s@8 velocity_enu_m_s@16
+# flow_rate_uncompensated_rad_s@24 flow_rate_compensated_rad_s@32
+# gyro_flu_rad_s@40, 56 bytes total.
+FLOW_VEL_FORMAT = "<Q2f2f2f2f3f4x"
+
+assert struct.calcsize(FLOW_FORMAT) == 56
+assert struct.calcsize(FLOW_VEL_FORMAT) == 56
+
+FLOW_FIELDS = (
+    "timestamp_us",
+    "flow_rad_x",
+    "flow_rad_y",
+    "delta_angle_x",
+    "delta_angle_y",
+    "delta_angle_z",
+    "distance_m",
+    "integration_timespan_us",
+    "max_flow_rate_rad_s",
+    "min_ground_distance_m",
+    "max_ground_distance_m",
+    "quality_pct",
+)
+
+FLOW_VEL_FIELDS = (
+    "timestamp_us",
+    "velocity_flu_x",
+    "velocity_flu_y",
+    "velocity_enu_x",
+    "velocity_enu_y",
+    "flow_rate_uncompensated_x",
+    "flow_rate_uncompensated_y",
+    "flow_rate_compensated_x",
+    "flow_rate_compensated_y",
+    "gyro_flu_x",
+    "gyro_flu_y",
+    "gyro_flu_z",
+)
+
+
+def decode(payload, fmt, fields):
+    if len(payload) != struct.calcsize(fmt):
         return None
-
-    # struct data starts at offset 16 (4 root + 8 vtable + 4 soffset)
-    data = payload[16:]
-    fields = struct.unpack_from("<q2f3ffIB3x3f", data)
-
-    return {
-        "timestamp_us": fields[0],
-        "pixel_flow_x": fields[1],
-        "pixel_flow_y": fields[2],
-        "delta_angle_x": fields[3],
-        "delta_angle_y": fields[4],
-        "delta_angle_z": fields[5],
-        "distance_m": fields[6],
-        "integration_timespan_us": fields[7],
-        "quality": fields[8],
-        "max_flow_rate": fields[9],
-        "min_ground_distance": fields[10],
-        "max_ground_distance": fields[11],
-    }
+    return dict(zip(fields, struct.unpack(fmt, payload)))
 
 
-def decode_vehicle_optical_flow_vel(payload: bytes):
-    """Decode VehicleOpticalFlowVel FlatBuffer table.
-
-    Struct VehicleOpticalFlowVelData (56 bytes):
-      int64  timestamp_us
-      float  vel_body.x, vel_body.y
-      float  vel_ne.x, vel_ne.y
-      float  flow_rate_uncompensated.x, flow_rate_uncompensated.y
-      float  flow_rate_compensated.x, flow_rate_compensated.y
-      float  gyro_rate.x, gyro_rate.y, gyro_rate.z
-    """
-    if len(payload) < 72:
-        return None
-
-    data = payload[16:]
-    fields = struct.unpack_from("<q2f2f2f2f3f", data)
-
-    return {
-        "timestamp_us": fields[0],
-        "vel_body_x": fields[1],
-        "vel_body_y": fields[2],
-        "vel_ne_x": fields[3],
-        "vel_ne_y": fields[4],
-        "flow_uncompensated_x": fields[5],
-        "flow_uncompensated_y": fields[6],
-        "flow_compensated_x": fields[7],
-        "flow_compensated_y": fields[8],
-        "gyro_rate_x": fields[9],
-        "gyro_rate_y": fields[10],
-        "gyro_rate_z": fields[11],
-    }
+def encoding_of(sample):
+    return str(sample.encoding) if sample.encoding is not None else ""
 
 
 def main():
-    conf = zenoh.Config()
-    session = zenoh.open(conf)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--namespace",
+        default="",
+        help="deployment namespace prefixing the bare catalog keys",
+    )
+    parser.add_argument(
+        "--every", type=int, default=10, help="print every Nth sample per topic"
+    )
+    args = parser.parse_args()
 
-    msg_count = {"flow": 0, "vel": 0}
+    prefix = f"{args.namespace}/" if args.namespace else ""
+    flow_key = f"{prefix}flow"
+    flow_vel_key = f"{prefix}flow_vel"
+
+    session = zenoh.open(zenoh.Config())
+
+    counts = {"flow": 0, "flow_vel": 0}
+    warned = set()
+
+    def check_contract(sample, expected, name):
+        received = encoding_of(sample)
+        if received == expected:
+            return True
+        if name not in warned:
+            warned.add(name)
+            print(f"[{name}] contract mismatch\n  expected {expected}\n  received {received}")
+        return False
 
     def on_flow(sample):
-        data = decode_vehicle_optical_flow(sample.payload.to_bytes())
-        if data:
-            msg_count["flow"] += 1
-            if msg_count["flow"] % 10 == 0:  # print every 10th
-                print(
-                    f"[FLOW] t={data['timestamp_us']} "
-                    f"px=({data['pixel_flow_x']:.4f}, {data['pixel_flow_y']:.4f}) "
-                    f"da=({data['delta_angle_x']:.4f}, {data['delta_angle_y']:.4f}, {data['delta_angle_z']:.4f}) "
-                    f"dist={data['distance_m']:.3f}m "
-                    f"q={data['quality']} "
-                    f"dt={data['integration_timespan_us']}us"
-                )
+        if not check_contract(sample, FLOW_CONTRACT, "flow"):
+            return
+        data = decode(sample.payload.to_bytes(), FLOW_FORMAT, FLOW_FIELDS)
+        if data is None:
+            return
+        counts["flow"] += 1
+        if counts["flow"] % args.every:
+            return
+        print(
+            f"[FLOW] t={data['timestamp_us']} "
+            f"flow=({data['flow_rad_x']:.5f}, {data['flow_rad_y']:.5f}) rad "
+            f"da=({data['delta_angle_x']:.5f}, {data['delta_angle_y']:.5f}, "
+            f"{data['delta_angle_z']:.5f}) rad "
+            f"dist={data['distance_m']:.3f} m "
+            f"q={data['quality_pct']}% "
+            f"dt={data['integration_timespan_us']} us"
+        )
 
     def on_flow_vel(sample):
-        data = decode_vehicle_optical_flow_vel(sample.payload.to_bytes())
-        if data:
-            msg_count["vel"] += 1
-            if msg_count["vel"] % 10 == 0:
-                print(
-                    f"[VEL]  t={data['timestamp_us']} "
-                    f"body=({data['vel_body_x']:.3f}, {data['vel_body_y']:.3f}) m/s "
-                    f"comp=({data['flow_compensated_x']:.4f}, {data['flow_compensated_y']:.4f}) rad/s "
-                    f"gyro=({data['gyro_rate_x']:.4f}, {data['gyro_rate_y']:.4f}, {data['gyro_rate_z']:.4f})"
-                )
+        if not check_contract(sample, FLOW_VEL_CONTRACT, "flow_vel"):
+            return
+        data = decode(sample.payload.to_bytes(), FLOW_VEL_FORMAT, FLOW_VEL_FIELDS)
+        if data is None:
+            return
+        counts["flow_vel"] += 1
+        if counts["flow_vel"] % args.every:
+            return
+        print(
+            f"[VEL]  t={data['timestamp_us']} "
+            f"flu=({data['velocity_flu_x']:.3f}, {data['velocity_flu_y']:.3f}) m/s "
+            f"comp=({data['flow_rate_compensated_x']:.4f}, "
+            f"{data['flow_rate_compensated_y']:.4f}) rad/s "
+            f"gyro=({data['gyro_flu_x']:.4f}, {data['gyro_flu_y']:.4f}, "
+            f"{data['gyro_flu_z']:.4f}) rad/s"
+        )
 
-    sub_flow = session.declare_subscriber(
-        "synapse/vehicle_optical_flow", on_flow
-    )
-    sub_vel = session.declare_subscriber(
-        "synapse/vehicle_optical_flow_vel", on_flow_vel
-    )
+    sub_flow = session.declare_subscriber(flow_key, on_flow)
+    sub_flow_vel = session.declare_subscriber(flow_vel_key, on_flow_vel)
 
-    print("Listening on synapse/vehicle_optical_flow and synapse/vehicle_optical_flow_vel...")
+    print(f"Listening on {flow_key} and {flow_vel_key}")
     print("Press Ctrl+C to exit\n")
 
     try:
         while True:
             time.sleep(1)
-            total = msg_count["flow"] + msg_count["vel"]
-            if total == 0:
-                print("  (no messages received yet - is zenohd running? is ethernet connected?)")
+            if counts["flow"] + counts["flow_vel"] == 0:
+                print("  (nothing received yet - is zenohd running? is ethernet up?)")
     except KeyboardInterrupt:
         pass
 
     sub_flow.undeclare()
-    sub_vel.undeclare()
+    sub_flow_vel.undeclare()
     session.close()
-    print(f"\nReceived {msg_count['flow']} flow, {msg_count['vel']} vel messages")
+    print(f"\nReceived {counts['flow']} flow, {counts['flow_vel']} flow_vel messages")
 
 
 if __name__ == "__main__":

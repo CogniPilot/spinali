@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 config SPINALI_SYNAPSE_ZENOH
-	bool "Zenoh Transport with FlatBuffers"
+	bool "Zenoh Transport"
 	default n
 	depends on ZROS
 	help
-	  Zenoh transport publishing processed optical flow data
-	  using FlatBuffers serialization.
+	  Zenoh transport publishing the synapse optical flow topics as
+	  raw fixed-layout structs tagged with their catalog value contract.
 
 if SPINALI_SYNAPSE_ZENOH
 
@@ -16,6 +16,16 @@ config ZENOH_LOCATOR
 	default "tcp/192.0.2.2:7447"
 	help
 	  Zenoh router address to connect to in client mode.
+
+config SPINALI_SYNAPSE_ZENOH_NAMESPACE
+	string "Deployment namespace for bare catalog keys"
+	default ""
+	help
+	  Optional deployment namespace, for example "cub1": topics using a
+	  bare catalog key such as flow publish as <namespace>/<key>. Empty
+	  publishes the bare key. Multi-segment namespaces such as "lab/cub1"
+	  are allowed; do not use leading or trailing slashes. This must match
+	  the namespace the receiving vehicle is configured with.
 
 module = SPINALI_SYNAPSE_ZENOH
 module-str = synapse_zenoh
