@@ -440,50 +440,54 @@ static void process_optical_flow(struct context *ctx)
 
 	zros_pub_update(&ctx->pub_optical_flow);
 
-	/* --- publish optical_flow_vel if distance available --- */
-	if (ctx->distance_sum_count > 0 && isfinite(ctx->distance_sum)) {
+	/*
+	 * --- publish optical_flow_vel, only for a window that supports one ---
+	 *
+	 * Without a range there is nothing to scale the flow by, and without a
+	 * span there is nothing to divide it by. Staying silent says that; a
+	 * message of zeroes would instead say the vehicle is stationary.
+	 */
+	if (ctx->distance_sum_count > 0 && isfinite(ctx->distance_sum) &&
+	    ctx->integration_timespan_us > 0U) {
 		float range = ctx->distance_sum / (float)ctx->distance_sum_count;
 		float flow_dt = 1e-6f * (float)ctx->integration_timespan_us;
 
 		synapse_topic_OpticalFlowVelocityData_t *vel = &ctx->optical_flow_vel;
 
+		/*
+		 * Both terms are rotations about the same body axes over the
+		 * same window, so what the vehicle rotated subtracts directly
+		 * from what the sensor saw.
+		 */
+		float compensated[2] = {
+			ctx->flow_rad[0] - ctx->delta_angle_flu[0],
+			ctx->flow_rad[1] - ctx->delta_angle_flu[1],
+		};
+
 		memset(vel, 0, sizeof(*vel));
 		vel->timestamp_us = (uint64_t)timestamp_us;
 
-		if (flow_dt > 1e-6f) {
-			/*
-			 * Both terms are rotations about the same body axes over
-			 * the same window, so what the vehicle rotated subtracts
-			 * directly from what the sensor saw.
-			 */
-			float compensated[2] = {
-				ctx->flow_rad[0] - ctx->delta_angle_flu[0],
-				ctx->flow_rad[1] - ctx->delta_angle_flu[1],
-			};
+		/*
+		 * Over a flat surface at range, forward travel sweeps the
+		 * boresight about +y and leftward travel sweeps it about -x.
+		 * Valid only while level: there is no tilt compensation here.
+		 */
+		vel->velocity_flu_m_s.x = range * compensated[1] / flow_dt;
+		vel->velocity_flu_m_s.y = -range * compensated[0] / flow_dt;
 
-			/*
-			 * Over a flat surface at range, forward travel sweeps
-			 * the boresight about +y and leftward travel sweeps it
-			 * about -x. Valid only while level: there is no tilt
-			 * compensation here.
-			 */
-			vel->velocity_flu_m_s.x = range * compensated[1] / flow_dt;
-			vel->velocity_flu_m_s.y = -range * compensated[0] / flow_dt;
+		/* ENU needs an attitude source this node does not have */
+		vel->velocity_enu_m_s.x = NAN;
+		vel->velocity_enu_m_s.y = NAN;
 
-			/* ENU needs an attitude source this node does not have */
-			vel->velocity_enu_m_s.x = NAN;
-			vel->velocity_enu_m_s.y = NAN;
+		/* rates carry the physical sign of the quantity they name */
+		vel->flow_rate_uncompensated_rad_s.x = ctx->flow_rad[0] / flow_dt;
+		vel->flow_rate_uncompensated_rad_s.y = ctx->flow_rad[1] / flow_dt;
+		vel->flow_rate_compensated_rad_s.x = compensated[0] / flow_dt;
+		vel->flow_rate_compensated_rad_s.y = compensated[1] / flow_dt;
 
-			/* rates carry the physical sign of the quantity they name */
-			vel->flow_rate_uncompensated_rad_s.x = ctx->flow_rad[0] / flow_dt;
-			vel->flow_rate_uncompensated_rad_s.y = ctx->flow_rad[1] / flow_dt;
-			vel->flow_rate_compensated_rad_s.x = compensated[0] / flow_dt;
-			vel->flow_rate_compensated_rad_s.y = compensated[1] / flow_dt;
-
-			vel->gyro_flu_rad_s.x = ctx->delta_angle_flu[0] / flow_dt;
-			vel->gyro_flu_rad_s.y = ctx->delta_angle_flu[1] / flow_dt;
-			vel->gyro_flu_rad_s.z = ctx->delta_angle_flu[2] / flow_dt;
-		}
+		vel->gyro_flu_rad_s.x = ctx->delta_angle_flu[0] / flow_dt;
+		vel->gyro_flu_rad_s.y = ctx->delta_angle_flu[1] / flow_dt;
+		vel->gyro_flu_rad_s.z = ctx->delta_angle_flu[2] / flow_dt;
 
 		zros_pub_update(&ctx->pub_optical_flow_vel);
 	}
