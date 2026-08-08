@@ -2,14 +2,21 @@
  * Copyright CogniPilot Foundation 2025
  * SPDX-License-Identifier: Apache-2.0
  *
- * PX4-style Vehicle Optical Flow processing module.
- * Fuses PAA3905, ICM45686, and AFBR-S50 sensor data.
+ * Optical flow fusion: accumulates PAA3905 image motion over an integration
+ * window, compensates it with the ICM45686 rotation across the same window,
+ * and pairs it with an AFBR-S50 range to produce a planar body velocity.
+ *
+ * Everything published from here is in the body FLU frame. Angles about the
+ * body axes are used throughout, so the flow the sensor saw and the rotation
+ * the vehicle performed are the same kind of quantity and subtract directly.
  */
 
 #include <math.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/shell/shell.h>
+
+#include <../drivers/sensor/pixart/paa3905/paa3905_reg.h>
 
 #include <zros/private/zros_node_struct.h>
 #include <zros/private/zros_pub_struct.h>
@@ -33,6 +40,7 @@ LOG_MODULE_REGISTER(vehicle_optical_flow, CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW_LO
 #define VOF_MAXHGT    (CONFIG_VOF_MAXHGT * 0.01f)
 #define VOF_MAXR      (CONFIG_VOF_MAXR * 0.01f)
 #define VOF_SENS      (CONFIG_VOF_SENS * 0.01f)
+#define VOF_MAXFRAME_US (CONFIG_VOF_MAXFRAME * 1000U)
 
 static K_THREAD_STACK_DEFINE(g_my_stack_area, MY_STACK_SIZE);
 
@@ -56,14 +64,15 @@ struct context {
 	struct integrator_coning gyro_integrator;
 	struct gyro_ring_buffer gyro_buffer;
 	struct range_ring_buffer range_buffer;
-	/* accumulation */
-	float flow_integral[2];
-	float delta_angle[3];
+	/* accumulation, body FLU */
+	float flow_rad[2];
+	float delta_angle_flu[3];
 	uint32_t integration_timespan_us;
 	float distance_sum;
 	uint8_t distance_sum_count;
-	uint16_t quality_sum;
+	uint16_t quality_pct_sum;
 	uint8_t accumulated_count;
+	uint8_t quality_pct_last;
 	int64_t flow_timestamp_sample_last_us;
 	int64_t gyro_timestamp_sample_last_us;
 	/* thread */
@@ -88,13 +97,14 @@ static struct context g_ctx = {
 	.gyro_integrator = {},
 	.gyro_buffer = {},
 	.range_buffer = {},
-	.flow_integral = {0.0f, 0.0f},
-	.delta_angle = {0.0f, 0.0f, 0.0f},
+	.flow_rad = {0.0f, 0.0f},
+	.delta_angle_flu = {0.0f, 0.0f, 0.0f},
 	.integration_timespan_us = 0,
 	.distance_sum = NAN,
 	.distance_sum_count = 0,
-	.quality_sum = 0,
+	.quality_pct_sum = 0,
 	.accumulated_count = 0,
+	.quality_pct_last = 0,
 	.flow_timestamp_sample_last_us = 0,
 	.gyro_timestamp_sample_last_us = 0,
 	.running = Z_SEM_INITIALIZER(g_ctx.running, 1, 1),
@@ -110,17 +120,34 @@ static int64_t timestamp_from_pb(const synapse_pb_Timestamp *ts)
 
 static void clear_accumulated_data(struct context *ctx)
 {
-	ctx->flow_integral[0] = 0.0f;
-	ctx->flow_integral[1] = 0.0f;
+	ctx->flow_rad[0] = 0.0f;
+	ctx->flow_rad[1] = 0.0f;
 	ctx->integration_timespan_us = 0;
-	ctx->delta_angle[0] = 0.0f;
-	ctx->delta_angle[1] = 0.0f;
-	ctx->delta_angle[2] = 0.0f;
+	ctx->delta_angle_flu[0] = 0.0f;
+	ctx->delta_angle_flu[1] = 0.0f;
+	ctx->delta_angle_flu[2] = 0.0f;
 	ctx->distance_sum = NAN;
 	ctx->distance_sum_count = 0;
-	ctx->quality_sum = 0;
+	ctx->quality_pct_sum = 0;
 	ctx->accumulated_count = 0;
 	integrator_coning_reset(&ctx->gyro_integrator);
+}
+
+/*
+ * Both sensors sit on the same carrier and share the in-plane mapping the
+ * flight controller applies to the ICM45686:
+ *
+ *   body x (forward) <-  sensor y
+ *   body y (left)    <- -sensor x
+ *   body z (up)      <-  sensor z
+ *
+ * Applying it at ingest keeps every accumulated quantity in body FLU, which
+ * is what makes the gyro rotation subtractable from the measured flow.
+ */
+static void sensor_xy_to_flu(float sensor_x, float sensor_y, float *flu_x, float *flu_y)
+{
+	*flu_x = sensor_y;
+	*flu_y = -sensor_x;
 }
 
 static void update_gyro_buffer(struct context *ctx)
@@ -142,13 +169,13 @@ static void update_gyro_buffer(struct context *ctx)
 
 	struct gyro_sample sample = {
 		.time_us = (uint64_t)timestamp_us,
-		.data = {
-			(float)imu->angular_velocity.x,
-			(float)imu->angular_velocity.y,
-			(float)imu->angular_velocity.z,
-		},
 		.dt = dt_s,
 	};
+
+	/* the imu topic carries raw chip axes */
+	sensor_xy_to_flu((float)imu->angular_velocity.x, (float)imu->angular_velocity.y,
+			 &sample.data[0], &sample.data[1]);
+	sample.data[2] = (float)imu->angular_velocity.z;
 
 	gyro_ring_buffer_push(&ctx->gyro_buffer, &sample);
 }
@@ -182,7 +209,13 @@ static void update_range_buffer(struct context *ctx)
 	range_ring_buffer_push(&ctx->range_buffer, &sample);
 }
 
-static void apply_rotation(float *x, float *y, int rot_deg)
+/*
+ * Trim for a flow sensor mounted rotated about its boresight relative to the
+ * IMU. It acts on the in-plane flow angles only: the gyro is already in body
+ * axes by the time it reaches the integrator, so rotating it here as well
+ * would double-count the mounting.
+ */
+static void apply_yaw_rotation(float *x, float *y, int rot_deg)
 {
 	float tmp;
 
@@ -207,6 +240,37 @@ static void apply_rotation(float *x, float *y, int rot_deg)
 	}
 }
 
+/*
+ * SQUAL is a raw feature count, meaningful only against the minimum for the
+ * observation mode the frame was captured in, below which the driver treats
+ * the frame as invalid. Scale the usable span onto the 0 to 100 the schema
+ * asks for, and report a frame at or below its minimum as zero quality.
+ */
+static uint8_t squal_to_quality_pct(uint8_t squal, uint8_t mode)
+{
+	uint8_t squal_min;
+
+	switch (mode) {
+	case OBSERVATION_MODE_BRIGHT:
+		squal_min = SQUAL_MIN_BRIGHT;
+		break;
+	case OBSERVATION_MODE_LOW_LIGHT:
+		squal_min = SQUAL_MIN_LOW_LIGHT;
+		break;
+	case OBSERVATION_MODE_SUPER_LOW_LIGHT:
+		squal_min = SQUAL_MIN_SUPER_LOW_LIGHT;
+		break;
+	default:
+		return 0U;
+	}
+
+	if (squal <= squal_min) {
+		return 0U;
+	}
+
+	return (uint8_t)(((uint32_t)(squal - squal_min) * 100U) / (UINT8_MAX - squal_min));
+}
+
 static void process_optical_flow(struct context *ctx)
 {
 	const synapse_pb_PixartPAA3905 *flow = &ctx->optical_flow_raw;
@@ -218,77 +282,95 @@ static void process_optical_flow(struct context *ctx)
 	int64_t timestamp_us = timestamp_from_pb(&flow->stamp);
 
 	/*
-	 * Convert raw PAA3905 counts to radians.
-	 * The PAA3905 delta_x/delta_y are in raw counts.
-	 * VOF_SENS is the sensitivity in counts/radian.
+	 * The PAA3905 reports no exposure window, so the frame period stands in
+	 * for it: the counts in this report were accumulated since the previous
+	 * one. That only holds while frames keep arriving. A frame following a
+	 * stall covers an unknown span, and a frame far longer than the ones
+	 * already accumulated means the stream broke mid-window, so in both
+	 * cases the partial accumulation is dropped rather than divided by a
+	 * denominator that no longer describes it.
 	 */
-	float pixel_flow_x = 0.0f;
-	float pixel_flow_y = 0.0f;
+	int64_t dt = (ctx->flow_timestamp_sample_last_us > 0)
+			     ? timestamp_us - ctx->flow_timestamp_sample_last_us
+			     : 0;
+	bool dt_usable = (dt > 0) && (dt <= (int64_t)VOF_MAXFRAME_US);
 
-	if (VOF_SENS > 0.0f) {
-		pixel_flow_x = (float)flow->delta_x / VOF_SENS;
-		pixel_flow_y = (float)flow->delta_y / VOF_SENS;
-	}
+	if (ctx->accumulated_count > 0) {
+		uint32_t mean_us = ctx->integration_timespan_us / ctx->accumulated_count;
 
-	/*
-	 * Estimate integration timespan from sensor data rate (~126Hz).
-	 * PAA3905 doesn't provide integration_timespan directly,
-	 * so we compute from timestamp deltas.
-	 */
-	uint32_t integration_timespan_us = 0;
-
-	if (ctx->flow_timestamp_sample_last_us > 0) {
-		int64_t dt = timestamp_us - ctx->flow_timestamp_sample_last_us;
-
-		if (dt > 0 && dt < 100000LL) {
-			integration_timespan_us = (uint32_t)dt;
-		}
-	}
-
-	/* gap detection: clear if timestamp gap > 2x integration_timespan */
-	if (ctx->accumulated_count > 0 && integration_timespan_us > 0) {
-		uint64_t gap = (uint64_t)(timestamp_us - ctx->flow_timestamp_sample_last_us);
-
-		if (gap > (uint64_t)integration_timespan_us * 2) {
+		if (!dt_usable || (mean_us > 0U && (uint64_t)dt > (uint64_t)mean_us * 2U)) {
+			LOG_DBG("flow gap %lld us, dropping %u frames", (long long)dt,
+				ctx->accumulated_count);
 			clear_accumulated_data(ctx);
 		}
 	}
 
-	/* quality transition detection */
-	uint8_t quality = flow->squal;
+	ctx->flow_timestamp_sample_last_us = timestamp_us;
 
-	if (ctx->accumulated_count > 0 && quality > 0 && ctx->quality_sum == 0) {
+	if (!dt_usable) {
+		return;
+	}
+
+	uint32_t integration_timespan_us = (uint32_t)dt;
+
+	uint8_t quality_pct = squal_to_quality_pct(flow->squal, (uint8_t)flow->mode);
+
+	/* surface reacquired: counts spanning the blind interval are not ours */
+	if (ctx->accumulated_count > 0 && quality_pct > 0U && ctx->quality_pct_last == 0U) {
 		clear_accumulated_data(ctx);
 	}
 
+	ctx->quality_pct_last = quality_pct;
+
+	/*
+	 * delta_x/delta_y are the displacement of the sensor over the surface
+	 * along the sensor axes, in counts. VOF_SENS is counts per radian of
+	 * subtended angle, so the quotient is the angle the boresight swept
+	 * relative to the surface, independently of height.
+	 */
+	float sweep[2] = {0.0f, 0.0f};
+
+	if (VOF_SENS > 0.0f) {
+		sensor_xy_to_flu((float)flow->delta_x / VOF_SENS, (float)flow->delta_y / VOF_SENS,
+				 &sweep[0], &sweep[1]);
+		apply_yaw_rotation(&sweep[0], &sweep[1], CONFIG_VOF_ROT);
+	}
+
+	/*
+	 * Restate the sweep as rotations about the body axes, which is what
+	 * flow_rad means and what makes it comparable with delta_angle_flu_rad.
+	 * Sweeping the boresight forward is a positive rotation about +y;
+	 * sweeping it left is a negative rotation about +x.
+	 */
+	float flow_rad[2] = {
+		-sweep[1] * VOF_SCALE,
+		sweep[0] * VOF_SCALE,
+	};
+
 	/* integrate gyro from ring buffer over flow time window */
-	if (integration_timespan_us > 0) {
-		uint64_t ts_oldest = (uint64_t)(timestamp_us - (int64_t)integration_timespan_us);
-		uint64_t ts_newest = (uint64_t)timestamp_us;
-		struct gyro_sample gyro_sample;
+	uint64_t ts_oldest = (uint64_t)(timestamp_us - (int64_t)integration_timespan_us);
+	uint64_t ts_newest = (uint64_t)timestamp_us;
+	struct gyro_sample gyro_sample;
 
-		while (gyro_ring_buffer_pop_oldest(&ctx->gyro_buffer, ts_oldest, ts_newest,
-						   &gyro_sample)) {
-			integrator_coning_put(&ctx->gyro_integrator, gyro_sample.data, gyro_sample.dt);
+	while (gyro_ring_buffer_pop_oldest(&ctx->gyro_buffer, ts_oldest, ts_newest, &gyro_sample)) {
+		integrator_coning_put(&ctx->gyro_integrator, gyro_sample.data, gyro_sample.dt);
 
-			float min_interval_s = (float)integration_timespan_us * 1e-6f * 0.99f;
+		float min_interval_s = (float)integration_timespan_us * 1e-6f * 0.99f;
 
-			if (integrator_coning_integral_dt(&ctx->gyro_integrator) > min_interval_s) {
-				break;
-			}
+		if (integrator_coning_integral_dt(&ctx->gyro_integrator) > min_interval_s) {
+			break;
 		}
+	}
 
-		float delta_angle[3];
-		uint32_t delta_angle_dt;
+	float delta_angle_flu[3];
+	uint32_t delta_angle_dt;
 
-		if (integrator_coning_reset_get(&ctx->gyro_integrator, delta_angle,
-						&delta_angle_dt)) {
-			ctx->delta_angle[0] += delta_angle[0];
-			ctx->delta_angle[1] += delta_angle[1];
-			ctx->delta_angle[2] += delta_angle[2];
-		} else {
-			integrator_coning_reset(&ctx->gyro_integrator);
-		}
+	if (integrator_coning_reset_get(&ctx->gyro_integrator, delta_angle_flu, &delta_angle_dt)) {
+		ctx->delta_angle_flu[0] += delta_angle_flu[0];
+		ctx->delta_angle_flu[1] += delta_angle_flu[1];
+		ctx->delta_angle_flu[2] += delta_angle_flu[2];
+	} else {
+		integrator_coning_reset(&ctx->gyro_integrator);
 	}
 
 	/* match distance from range buffer */
@@ -306,11 +388,10 @@ static void process_optical_flow(struct context *ctx)
 	}
 
 	/* accumulate */
-	ctx->flow_timestamp_sample_last_us = timestamp_us;
-	ctx->flow_integral[0] += pixel_flow_x;
-	ctx->flow_integral[1] += pixel_flow_y;
+	ctx->flow_rad[0] += flow_rad[0];
+	ctx->flow_rad[1] += flow_rad[1];
 	ctx->integration_timespan_us += integration_timespan_us;
-	ctx->quality_sum += quality;
+	ctx->quality_pct_sum += quality_pct;
 	ctx->accumulated_count++;
 
 	/* rate limiting */
@@ -334,24 +415,19 @@ static void process_optical_flow(struct context *ctx)
 	memset(vof, 0, sizeof(*vof));
 
 	vof->timestamp_us = (uint64_t)timestamp_us;
-
-	/* apply scale */
-	float scaled_flow[2] = {
-		ctx->flow_integral[0] * VOF_SCALE,
-		ctx->flow_integral[1] * VOF_SCALE,
-	};
-
-	/* apply rotation */
-	apply_rotation(&scaled_flow[0], &scaled_flow[1], CONFIG_VOF_ROT);
-
-	vof->flow_rad.x = scaled_flow[0];
-	vof->flow_rad.y = scaled_flow[1];
-	vof->delta_angle_flu_rad.x = ctx->delta_angle[0];
-	vof->delta_angle_flu_rad.y = ctx->delta_angle[1];
-	vof->delta_angle_flu_rad.z = ctx->delta_angle[2];
+	vof->flow_rad.x = ctx->flow_rad[0];
+	vof->flow_rad.y = ctx->flow_rad[1];
+	vof->delta_angle_flu_rad.x = ctx->delta_angle_flu[0];
+	vof->delta_angle_flu_rad.y = ctx->delta_angle_flu[1];
+	vof->delta_angle_flu_rad.z = ctx->delta_angle_flu[2];
 	vof->integration_timespan_us = ctx->integration_timespan_us;
-	vof->quality_pct = (uint8_t)(ctx->quality_sum / ctx->accumulated_count);
+	vof->quality_pct = (uint8_t)(ctx->quality_pct_sum / ctx->accumulated_count);
 
+	/*
+	 * The schema has no validity flag, so an unmatched window leaves
+	 * distance_m at NAN and a consumer has to isfinite-gate it. The
+	 * velocity message is simply not published for such a window.
+	 */
 	if (ctx->distance_sum_count > 0 && isfinite(ctx->distance_sum)) {
 		vof->distance_m = ctx->distance_sum / (float)ctx->distance_sum_count;
 	} else {
@@ -376,39 +452,37 @@ static void process_optical_flow(struct context *ctx)
 
 		if (flow_dt > 1e-6f) {
 			/*
-			 * PX4 sign convention: EKF assumes positive LOS rate is
-			 * produced by a RH rotation of the image about the sensor axis.
+			 * Both terms are rotations about the same body axes over
+			 * the same window, so what the vehicle rotated subtracts
+			 * directly from what the sensor saw.
 			 */
-			float flow_xy_rad[2] = {-scaled_flow[0], -scaled_flow[1]};
-			float gyro_rate_integral[3] = {
-				-ctx->delta_angle[0],
-				-ctx->delta_angle[1],
-				-ctx->delta_angle[2],
+			float compensated[2] = {
+				ctx->flow_rad[0] - ctx->delta_angle_flu[0],
+				ctx->flow_rad[1] - ctx->delta_angle_flu[1],
 			};
 
-			float flow_compensated[2] = {
-				flow_xy_rad[0] - gyro_rate_integral[0],
-				flow_xy_rad[1] - gyro_rate_integral[1],
-			};
+			/*
+			 * Over a flat surface at range, forward travel sweeps
+			 * the boresight about +y and leftward travel sweeps it
+			 * about -x. Valid only while level: there is no tilt
+			 * compensation here.
+			 */
+			vel->velocity_flu_m_s.x = range * compensated[1] / flow_dt;
+			vel->velocity_flu_m_s.y = -range * compensated[0] / flow_dt;
 
-			/* velocity in body frame */
-			vel->velocity_flu_m_s.x = -range * flow_compensated[1] / flow_dt;
-			vel->velocity_flu_m_s.y = range * flow_compensated[0] / flow_dt;
-
-			/* ENU frame velocity - requires attitude, set NAN for now */
+			/* ENU needs an attitude source this node does not have */
 			vel->velocity_enu_m_s.x = NAN;
 			vel->velocity_enu_m_s.y = NAN;
 
-			/* flow rates */
-			vel->flow_rate_uncompensated_rad_s.x = flow_xy_rad[0] / flow_dt;
-			vel->flow_rate_uncompensated_rad_s.y = flow_xy_rad[1] / flow_dt;
-			vel->flow_rate_compensated_rad_s.x = flow_compensated[0] / flow_dt;
-			vel->flow_rate_compensated_rad_s.y = flow_compensated[1] / flow_dt;
+			/* rates carry the physical sign of the quantity they name */
+			vel->flow_rate_uncompensated_rad_s.x = ctx->flow_rad[0] / flow_dt;
+			vel->flow_rate_uncompensated_rad_s.y = ctx->flow_rad[1] / flow_dt;
+			vel->flow_rate_compensated_rad_s.x = compensated[0] / flow_dt;
+			vel->flow_rate_compensated_rad_s.y = compensated[1] / flow_dt;
 
-			/* gyro rate */
-			vel->gyro_flu_rad_s.x = gyro_rate_integral[0] / flow_dt;
-			vel->gyro_flu_rad_s.y = gyro_rate_integral[1] / flow_dt;
-			vel->gyro_flu_rad_s.z = gyro_rate_integral[2] / flow_dt;
+			vel->gyro_flu_rad_s.x = ctx->delta_angle_flu[0] / flow_dt;
+			vel->gyro_flu_rad_s.y = ctx->delta_angle_flu[1] / flow_dt;
+			vel->gyro_flu_rad_s.z = ctx->delta_angle_flu[2] / flow_dt;
 		}
 
 		zros_pub_update(&ctx->pub_optical_flow_vel);

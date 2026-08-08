@@ -23,6 +23,16 @@ config VOF_SCALE
 	help
 	  Scale factor applied to accumulated flow. 100 = 1.0x.
 
+config VOF_MAXFRAME
+	int "Max usable flow frame period (ms)"
+	default 100
+	help
+	  Longest frame-to-frame period still treated as a valid integration
+	  window. A longer period means the flow stream stalled, so the frame
+	  covers an unknown span of motion and both it and any partial
+	  accumulation are discarded. Keep this above the PAA3905 backup timer
+	  so that no-motion frames are not mistaken for a stall.
+
 config VOF_ROT
 	int "Sensor rotation (degrees: 0, 90, 180, 270)"
 	default 0
