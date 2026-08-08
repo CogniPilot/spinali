@@ -30,7 +30,7 @@
 	status = "disabled";
 };
 
-/* icm45686_1 not aliased — not used for streaming */
+/* icm45686_1 not aliased - not used for streaming */
 
 /* Lower ethernet MAC interrupt priority to prevent early RX before net stack ready */
 &enet_mac {

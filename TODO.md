@@ -6,17 +6,17 @@ The zenoh-pico TCP client connection to zenohd fails with `_Z_ERR_TRANSPORT_OPEN
 The TCP socket creates successfully but the zenoh protocol handshake fails.
 
 **Root causes found and fixed so far:**
-- `CONFIG_HEAP_MEM_POOL_SIZE=0` caused `_Z_ERR_SYSTEM_OUT_OF_MEMORY` (-78) — fixed with 32KB heap
-- `ZVFS_OPEN_MAX` too low caused `ENFILE` (errno=23) — fixed with 16
-- zenoh-pico `config.h` hardcodes all `Z_FEATURE_*` defines, overriding Kconfig — fixed with `#ifndef` guards
-- `CONFIG_NET_TCP` was not enabled — fixed
+- `CONFIG_HEAP_MEM_POOL_SIZE=0` caused `_Z_ERR_SYSTEM_OUT_OF_MEMORY` (-78) - fixed with 32KB heap
+- `ZVFS_OPEN_MAX` too low caused `ENFILE` (errno=23) - fixed with 16
+- zenoh-pico `config.h` hardcodes all `Z_FEATURE_*` defines, overriding Kconfig - fixed with `#ifndef` guards
+- `CONFIG_NET_TCP` was not enabled - fixed
 
 **Still broken:**
 - `z_open()` returns -102 after TCP link opens but protocol handshake fails
 - Need to instrument zenoh-pico `_z_unicast_open_client()` in `src/transport/unicast/transport.c` to find exact failure point
 - May be a zenoh protocol version negotiation issue between zenoh-pico 1.8.0 and zenohd 1.8.0
-- Alternative: try peer-to-peer mode (board listens, desktop connects) — requires `Z_FEATURE_UNICAST_PEER`
-- The zenoh branch used client mode with all features enabled including scouting/multicast — unclear if it ever worked
+- Alternative: try peer-to-peer mode (board listens, desktop connects) - requires `Z_FEATURE_UNICAST_PEER`
+- The zenoh branch used client mode with all features enabled including scouting/multicast - unclear if it ever worked
 
 ## Ethernet Boot Crash
 
@@ -32,7 +32,7 @@ isn't registered when the first RX interrupt fires.
 
 The PAA3905 optical flow sensor LED stays on in auto mode (`0x6F = 0x2C`).
 Tested values for register `0x6F` in bank `0x14`:
-- `0x2C` = auto (sensor controls LED) — LED turns on in low light
+- `0x2C` = auto (sensor controls LED) - LED turns on in low light
 - `0x0C` = enable LED driver
 - `0x30` = force bright mode
 - `0x00` = tested, LED still on

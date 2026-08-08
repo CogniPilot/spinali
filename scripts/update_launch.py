@@ -31,7 +31,7 @@ with open(runner_yaml_path, "r") as f:
 debug_runner = runner_data.get("debug-runner")
 runner_args = runner_data.get("args", {}).get(debug_runner, [])
 
-# VSCode launch.json path — project root (one level up from build)
+# VSCode launch.json path - project root (one level up from build)
 workspace_root = os.path.dirname(build_dir)
 vscode_launch = os.path.join(workspace_root, ".vscode", "launch.json")
 os.makedirs(os.path.dirname(vscode_launch), exist_ok=True)
