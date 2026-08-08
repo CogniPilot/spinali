@@ -57,12 +57,31 @@ config VOF_MAXR
 	help
 	  Maximum measurable angular rate. 800 = 8.0 rad/s.
 
+	  From the PAA3905 speed versus height chart, which gives 8.0759 x
+	  height m/s for observation modes 0 and 1. Dividing by height leaves
+	  8.08 rad/s independent of height.
+
 config VOF_SENS
 	int "PAA3905 sensitivity (x100 counts/rad)"
-	default 1150
+	default 48024
 	help
-	  PAA3905 sensitivity for converting raw counts to radians.
-	  Depends on CPI setting and lens focal length.
+	  Counts per radian of angle subtended at the sensor, for converting
+	  reported counts into the angle the boresight swept over the surface.
+	  48024 = 480.24 counts/rad.
+
+	  From the PAA3905 resolution formula, with height in metres:
+
+	    CPI = 12.198 / height x (RESOLUTION + 1) x 200 / 8600
+
+	  One count is 1/CPI inches of travel at the surface, so the angle it
+	  subtends is 0.0254 / (CPI x height) radians, and height cancels:
+
+	    counts/rad = 12.198 x (RESOLUTION + 1) x (200 / 8600) / 0.0254
+
+	  At the RESOLUTION register default of 42 the middle term is exactly
+	  1, leaving 12.198 / 0.0254 = 480.24 counts/rad, or 2.08 mrad per
+	  count. Scale this value by (RESOLUTION + 1) x 200 / 8600 if the
+	  devicetree resolution property is changed.
 
 module = SPINALI_VEHICLE_OPTICAL_FLOW
 module-str = vehicle_optical_flow
