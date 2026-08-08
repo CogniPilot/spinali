@@ -2,12 +2,25 @@
 /* Copyright 2025 CogniPilot Foundation */
 
 / {
+	chosen {
+		zephyr,console = &flexcomm1_lpuart1;
+		zephyr,shell-uart = &flexcomm1_lpuart1;
+		zephyr,uart-mcumgr = &flexcomm1_lpuart1;
+	};
 
 	aliases {
 		imu-stream-0 = &icm45686_0;
 		optical-flow-stream-0 = &paa3905;
 		argus-stream-0 = &afbr_s50;
 	};
+};
+
+&flexcomm1_lpi2c1 {
+	status = "disabled";
+};
+
+&flexcomm1_lpuart1 {
+	status = "okay";
 };
 
 /* USB Shell IRQ priority lower than SPI IRQs */
