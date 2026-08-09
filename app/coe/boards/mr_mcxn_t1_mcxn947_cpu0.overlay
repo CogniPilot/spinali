@@ -87,16 +87,12 @@
 	};
 };
 
-/* INPUTMUX: routes CT_INP4 onto CTIMER4 capture channel 0. The SoC
- * dtsi does not model this peripheral; offset 0x6000 in the peripheral
- * space (0x50006000 secure alias).
+/* INPUTMUX: routes CT_INP4 onto CTIMER4 capture channel 0. The SoC dtsi
+ * models inputmux0 (disabled) at offset 0x6000 in the peripheral space
+ * (0x50006000 secure alias); enable it here for the capture route.
  */
-&peripheral {
-	inputmux0: inputmux@6000 {
-		compatible = "nxp,inputmux";
-		reg = <0x6000 0x1000>;
-		#inputmux-cells = <2>;
-	};
+&inputmux0 {
+	status = "okay";
 };
 
 /* CTIMER4 hardware-captures the F9P TIMEPULSE edge. board.c attaches
@@ -108,7 +104,7 @@
 	status = "okay";
 	pinctrl-0 = <&pinmux_ctimer_pps>;
 	pinctrl-names = "default";
-	inputmux-connections = <&inputmux0 0 0x1C000004>;
+	mux-states = <&inputmux0 0 0x1C000004>;
 };
 
 /* ENET QoS PTP hardware clock (PHC): the clock disciplined to GNSS,
