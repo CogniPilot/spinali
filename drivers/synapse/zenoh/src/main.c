@@ -88,12 +88,14 @@ static int zenoh_session_init(struct context *ctx)
 		}
 	} while ((ret = z_open(&ctx->session, z_move(config), NULL)) < 0);
 
+#if Z_FEATURE_MULTI_THREAD == 1
 	if (zp_start_read_task(z_loan_mut(ctx->session), NULL) < 0 ||
 	    zp_start_lease_task(z_loan_mut(ctx->session), NULL) < 0) {
 		LOG_ERR("Unable to start read and lease tasks");
 		z_drop(z_move(ctx->session));
 		return -EINVAL;
 	}
+#endif
 
 	LOG_INF("Zenoh session opened");
 	return 0;
@@ -264,6 +266,10 @@ static void zenoh_run(void *p0, void *p1, void *p2)
 			publish_struct(z_loan(ctx->pub_flow_vel), &ctx->flow_vel,
 				       sizeof(ctx->flow_vel));
 		}
+
+#if Z_FEATURE_MULTI_THREAD == 0
+		zp_spin_once(z_loan(ctx->session));
+#endif
 	}
 
 	zenoh_fini(ctx);
