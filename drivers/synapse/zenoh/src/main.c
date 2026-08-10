@@ -38,16 +38,11 @@ static K_THREAD_STACK_DEFINE(g_my_stack_area, MY_STACK_SIZE);
 
 struct context {
 	struct zros_node node;
-	/* subscriptions */
-	struct zros_sub sub_optical_flow;
-	struct zros_sub sub_optical_flow_vel;
-	/* topic data */
+	/* topic data, pointed to by the topic table rows below */
 	synapse_topic_OpticalFlowData_t flow;
 	synapse_topic_OpticalFlowVelocityData_t flow_vel;
 	/* zenoh */
 	z_owned_session_t session;
-	z_owned_publisher_t pub_flow;
-	z_owned_publisher_t pub_flow_vel;
 	/* thread */
 	struct k_sem running;
 	size_t stack_size;
@@ -57,8 +52,6 @@ struct context {
 
 static struct context g_ctx = {
 	.node = {},
-	.sub_optical_flow = {},
-	.sub_optical_flow_vel = {},
 	.flow = {},
 	.flow_vel = {},
 	.running = Z_SEM_INITIALIZER(g_ctx.running, 1, 1),
@@ -67,14 +60,54 @@ static struct context g_ctx = {
 	.thread_data = {},
 };
 
+/*
+ * One row per published topic. A row binds a subscribed zros topic to the
+ * fixed-layout struct buffer its samples land in, and to the Zenoh key and
+ * value contract those bytes go out under. Adding a topic is a matter of
+ * adding a row; the subscriber init, publisher declaration, poll set, run
+ * loop and teardown all iterate this table.
+ */
+struct topic_binding {
+	struct zros_topic *topic;
+	void *buffer;
+	size_t size;
+	const char *key;
+	const char *contract;
+};
+
+static const struct topic_binding topic_table[] = {
+	{
+		.topic = &topic_optical_flow,
+		.buffer = &g_ctx.flow,
+		.size = sizeof(g_ctx.flow),
+		.key = SYNAPSE_TOPIC_OPTICAL_FLOW_KEY,
+		.contract = SYNAPSE_TOPIC_OPTICAL_FLOW_CONTRACT,
+	},
+	{
+		.topic = &topic_optical_flow_vel,
+		.buffer = &g_ctx.flow_vel,
+		.size = sizeof(g_ctx.flow_vel),
+		.key = SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_KEY,
+		.contract = SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_CONTRACT,
+	},
+};
+
+/* Parallel per-row state, indexed the same way as topic_table. */
+static struct zros_sub subs[ARRAY_SIZE(topic_table)];
+static z_owned_publisher_t publishers[ARRAY_SIZE(topic_table)];
+
 static int zenoh_session_init(struct context *ctx)
 {
+#if defined(CONFIG_SPINALI_SYNAPSE_ZENOH_MODE_PEER)
+	const char *mode = "peer";
+#else
 	const char *mode = "client";
+#endif
 	const char *locator = CONFIG_ZENOH_LOCATOR;
 	z_owned_config_t config;
 	int ret = 0;
 
-	LOG_INF("Opening zenoh session to %s ...", locator);
+	LOG_INF("Opening zenoh session (%s) via %s ...", mode, locator);
 
 
 	do {
@@ -161,17 +194,15 @@ static int declare_topic_publisher(struct context *ctx, z_owned_publisher_t *pub
 
 static int zenoh_publishers_init(struct context *ctx)
 {
-	int ret;
-
-	ret = declare_topic_publisher(ctx, &ctx->pub_flow, SYNAPSE_TOPIC_OPTICAL_FLOW_KEY,
-				      SYNAPSE_TOPIC_OPTICAL_FLOW_CONTRACT);
-	if (ret < 0) {
-		return ret;
+	for (size_t i = 0; i < ARRAY_SIZE(topic_table); i++) {
+		int ret = declare_topic_publisher(ctx, &publishers[i], topic_table[i].key,
+						  topic_table[i].contract);
+		if (ret < 0) {
+			return ret;
+		}
 	}
 
-	return declare_topic_publisher(ctx, &ctx->pub_flow_vel,
-				       SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_KEY,
-				       SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_CONTRACT);
+	return 0;
 }
 
 static void publish_struct(const z_loaned_publisher_t *pub, const void *data, size_t size)
@@ -192,17 +223,13 @@ static int zenoh_init(struct context *ctx)
 
 	zros_node_init(&ctx->node, "zenoh");
 
-	ret = zros_sub_init(&ctx->sub_optical_flow, &ctx->node, &topic_optical_flow, &ctx->flow, 70);
-	if (ret < 0) {
-		LOG_ERR("init sub optical_flow failed: %d", ret);
-		return ret;
-	}
-
-	ret = zros_sub_init(&ctx->sub_optical_flow_vel, &ctx->node, &topic_optical_flow_vel,
-			    &ctx->flow_vel, 70);
-	if (ret < 0) {
-		LOG_ERR("init sub optical_flow_vel failed: %d", ret);
-		return ret;
+	for (size_t i = 0; i < ARRAY_SIZE(topic_table); i++) {
+		ret = zros_sub_init(&subs[i], &ctx->node, topic_table[i].topic,
+				    topic_table[i].buffer, 70);
+		if (ret < 0) {
+			LOG_ERR("init sub %s failed: %d", topic_table[i].key, ret);
+			return ret;
+		}
 	}
 
 	ret = zenoh_session_init(ctx);
@@ -222,10 +249,12 @@ static int zenoh_init(struct context *ctx)
 
 static int zenoh_fini(struct context *ctx)
 {
-	z_undeclare_publisher(z_move(ctx->pub_flow));
-	z_undeclare_publisher(z_move(ctx->pub_flow_vel));
-	zros_sub_fini(&ctx->sub_optical_flow);
-	zros_sub_fini(&ctx->sub_optical_flow_vel);
+	for (size_t i = 0; i < ARRAY_SIZE(topic_table); i++) {
+		z_undeclare_publisher(z_move(publishers[i]));
+	}
+	for (size_t i = 0; i < ARRAY_SIZE(topic_table); i++) {
+		zros_sub_fini(&subs[i]);
+	}
 	zros_node_fini(&ctx->node);
 	k_sem_give(&ctx->running);
 	LOG_INF("fini");
@@ -247,10 +276,11 @@ static void zenoh_run(void *p0, void *p1, void *p2)
 	}
 
 	while (k_sem_take(&ctx->running, K_NO_WAIT) < 0) {
-		struct k_poll_event events[] = {
-			*zros_sub_get_event(&ctx->sub_optical_flow),
-			*zros_sub_get_event(&ctx->sub_optical_flow_vel),
-		};
+		struct k_poll_event events[ARRAY_SIZE(topic_table)];
+
+		for (size_t i = 0; i < ARRAY_SIZE(topic_table); i++) {
+			events[i] = *zros_sub_get_event(&subs[i]);
+		}
 
 		int rc = k_poll(events, ARRAY_SIZE(events), K_MSEC(1000));
 
@@ -258,13 +288,11 @@ static void zenoh_run(void *p0, void *p1, void *p2)
 			LOG_DBG("poll timeout");
 		}
 
-		if (zros_sub_update(&ctx->sub_optical_flow) == 0) {
-			publish_struct(z_loan(ctx->pub_flow), &ctx->flow, sizeof(ctx->flow));
-		}
-
-		if (zros_sub_update(&ctx->sub_optical_flow_vel) == 0) {
-			publish_struct(z_loan(ctx->pub_flow_vel), &ctx->flow_vel,
-				       sizeof(ctx->flow_vel));
+		for (size_t i = 0; i < ARRAY_SIZE(topic_table); i++) {
+			if (zros_sub_update(&subs[i]) == 0) {
+				publish_struct(z_loan(publishers[i]), topic_table[i].buffer,
+					       topic_table[i].size);
+			}
 		}
 
 #if Z_FEATURE_MULTI_THREAD == 0

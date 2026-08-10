@@ -11,11 +11,31 @@ config SPINALI_SYNAPSE_ZENOH
 
 if SPINALI_SYNAPSE_ZENOH
 
-config ZENOH_LOCATOR
-	string "Zenoh router locator"
-	default "tcp/192.0.2.2:7447"
+choice
+	prompt "Zenoh session mode"
+	default SPINALI_SYNAPSE_ZENOH_MODE_CLIENT
 	help
-	  Zenoh router address to connect to in client mode.
+	  Client mode connects to a zenoh router. Peer mode joins a router-less
+	  peer-to-peer mesh and discovers other peers over UDP multicast on the
+	  local segment, so no router is needed. Peer mode additionally requires
+	  CONFIG_ZENOH_PICO_LINK_UDP_MULTICAST=y and CONFIG_ZENOH_PICO_SCOUTING=y
+	  in the build.
+
+config SPINALI_SYNAPSE_ZENOH_MODE_CLIENT
+	bool "Client (connect to a router)"
+
+config SPINALI_SYNAPSE_ZENOH_MODE_PEER
+	bool "Peer (router-less multicast mesh)"
+
+endchoice
+
+config ZENOH_LOCATOR
+	string "Zenoh endpoint locator"
+	default "tcp/192.0.2.2:7447" if SPINALI_SYNAPSE_ZENOH_MODE_CLIENT
+	default "udp/224.0.0.224:7446" if SPINALI_SYNAPSE_ZENOH_MODE_PEER
+	help
+	  In client mode, the zenoh router address to connect to. In peer mode,
+	  the UDP multicast locator used for peer discovery on the local segment.
 
 config SPINALI_SYNAPSE_ZENOH_NAMESPACE
 	string "Deployment namespace for bare catalog keys"
