@@ -20,55 +20,74 @@ import zenoh
 
 FLOW_CONTRACT = (
     "application/x-synapse-struct;type=synapse.topic.OpticalFlowData;"
-    "schema=sha256-128:e880efa8756c9c6c7938d1fbf3b03fc8"
+    "schema=sha256-128:9d4077b392c1e5de954843933aa812b3"
 )
 FLOW_VEL_CONTRACT = (
     "application/x-synapse-struct;type=synapse.topic.OpticalFlowVelocityData;"
-    "schema=sha256-128:5505d8e94ad10e80320320e3658734fa"
+    "schema=sha256-128:031ec34678c4f89aa98d1127f0b72c05"
 )
 
-# OpticalFlowData: timestamp_us@0 flow_rad@8 delta_angle_flu_rad@16 distance_m@28
-# integration_timespan_us@32 max_flow_rate_rad_s@36 min_ground_distance_m@40
-# max_ground_distance_m@44 quality_pct@48, 56 bytes total.
-FLOW_FORMAT = "<Q2f3ffI3fB7x"
+# OpticalFlowData: 88-byte fixed struct, see fbs/optical_flow.fbs. All time
+# fields are nanoseconds; the trailing seven ubytes carry quality (0-255),
+# distance_quality (0-255), distance_pixel_ok (0-32), mode, flags, time_status,
+# and id, followed by one pad byte.
+FLOW_FORMAT = "<QQQ2f3f2fII5f7Bx"
 
-# OpticalFlowVelocityData: timestamp_us@0 velocity_flu_m_s@8 velocity_enu_m_s@16
-# flow_rate_uncompensated_rad_s@24 flow_rate_compensated_rad_s@32
-# gyro_flu_rad_s@40, 56 bytes total.
-FLOW_VEL_FORMAT = "<Q2f2f2f2f3f4x"
+# OpticalFlowVelocityData: 32-byte fixed struct. velocity is body FLU only;
+# there is no ENU velocity and no gyro or flow-rate field here.
+FLOW_VEL_FORMAT = "<Q2f3f4B"
 
-assert struct.calcsize(FLOW_FORMAT) == 56
-assert struct.calcsize(FLOW_VEL_FORMAT) == 56
+assert struct.calcsize(FLOW_FORMAT) == 88
+assert struct.calcsize(FLOW_VEL_FORMAT) == 32
 
 FLOW_FIELDS = (
-    "timestamp_us",
+    "timestamp_ns",
+    "timestamp_sample_ns",
+    "distance_timestamp_ns",
     "flow_rad_x",
     "flow_rad_y",
     "delta_angle_x",
     "delta_angle_y",
     "delta_angle_z",
     "distance_m",
-    "integration_timespan_us",
+    "distance_spread_m",
+    "integration_timespan_ns",
+    "error_count",
     "max_flow_rate_rad_s",
     "min_ground_distance_m",
     "max_ground_distance_m",
-    "quality_pct",
+    "field_of_view_rad",
+    "temperature_c",
+    "quality",
+    "distance_quality",
+    "distance_pixel_ok",
+    "mode",
+    "flags",
+    "time_status",
+    "id",
 )
 
 FLOW_VEL_FIELDS = (
-    "timestamp_us",
+    "timestamp_ns",
     "velocity_flu_x",
     "velocity_flu_y",
-    "velocity_enu_x",
-    "velocity_enu_y",
-    "flow_rate_uncompensated_x",
-    "flow_rate_uncompensated_y",
-    "flow_rate_compensated_x",
-    "flow_rate_compensated_y",
-    "gyro_flu_x",
-    "gyro_flu_y",
-    "gyro_flu_z",
+    "distance_m",
+    "roll_rad",
+    "pitch_rad",
+    "quality",
+    "flags",
+    "time_status",
+    "id",
 )
+
+# TimeStatus enum (types.fbs): discipline state behind the timestamps.
+TIME_STATUS_NAMES = ("LocalFreerun", "GptpSynced", "GptpHoldover")
+
+
+def time_status_name(value):
+    if 0 <= value < len(TIME_STATUS_NAMES):
+        return TIME_STATUS_NAMES[value]
+    return f"?{value}"
 
 
 def decode(payload, fmt, fields):
@@ -121,13 +140,15 @@ def main():
         if counts["flow"] % args.every:
             return
         print(
-            f"[FLOW] t={data['timestamp_us']} "
+            f"[FLOW] t={data['timestamp_ns']} "
             f"flow=({data['flow_rad_x']:.5f}, {data['flow_rad_y']:.5f}) rad "
             f"da=({data['delta_angle_x']:.5f}, {data['delta_angle_y']:.5f}, "
             f"{data['delta_angle_z']:.5f}) rad "
-            f"dist={data['distance_m']:.3f} m "
-            f"q={data['quality_pct']}% "
-            f"dt={data['integration_timespan_us']} us"
+            f"dist={data['distance_m']:.3f} m spread={data['distance_spread_m']:.3f} m "
+            f"q={data['quality']}/255 dq={data['distance_quality']}/255 "
+            f"pix_ok={data['distance_pixel_ok']} "
+            f"dt={data['integration_timespan_ns']} ns "
+            f"clk={time_status_name(data['time_status'])}"
         )
 
     def on_flow_vel(sample):
@@ -140,12 +161,12 @@ def main():
         if counts["flow_vel"] % args.every:
             return
         print(
-            f"[VEL]  t={data['timestamp_us']} "
+            f"[VEL]  t={data['timestamp_ns']} "
             f"flu=({data['velocity_flu_x']:.3f}, {data['velocity_flu_y']:.3f}) m/s "
-            f"comp=({data['flow_rate_compensated_x']:.4f}, "
-            f"{data['flow_rate_compensated_y']:.4f}) rad/s "
-            f"gyro=({data['gyro_flu_x']:.4f}, {data['gyro_flu_y']:.4f}, "
-            f"{data['gyro_flu_z']:.4f}) rad/s"
+            f"dist={data['distance_m']:.3f} m "
+            f"rp=({data['roll_rad']:+.3f}, {data['pitch_rad']:+.3f}) rad "
+            f"q={data['quality']}/255 "
+            f"clk={time_status_name(data['time_status'])}"
         )
 
     sub_flow = session.declare_subscriber(flow_key, on_flow)
