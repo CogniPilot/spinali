@@ -19,8 +19,10 @@
 #include <zephyr/shell/shell.h>
 
 #include <zros/private/zros_node_struct.h>
+#include <zros/private/zros_pub_struct.h>
 #include <zros/private/zros_sub_struct.h>
 #include <zros/zros_node.h>
+#include <zros/zros_pub.h>
 #include <zros/zros_sub.h>
 
 #include <zenoh-pico.h>
@@ -34,6 +36,20 @@ LOG_MODULE_REGISTER(synapse_zenoh, CONFIG_SPINALI_SYNAPSE_ZENOH_LOG_LEVEL);
 
 #define KEYEXPR_MAX 96
 
+/*
+ * Inbound RTCM3 corrections. Only a node that forwards corrections to a GNSS
+ * receiver (CONFIG_ZROS_SENSE_RTCM3_SUB) wants this path, and it needs the
+ * zenoh subscription feature compiled in. The wire payload is the raw
+ * variable-length RTCM3 byte stream (no fixed-layout struct, no value
+ * contract), so the driver republishes it verbatim on topic_rtcm3.
+ */
+#if defined(CONFIG_ZROS_SENSE_RTCM3_SUB) && Z_FEATURE_SUBSCRIPTION == 1
+#define SYNAPSE_ZENOH_RTCM3_INBOUND 1
+#define SYNAPSE_TOPIC_RTCM3_KEY     "rtcm3"
+#else
+#define SYNAPSE_ZENOH_RTCM3_INBOUND 0
+#endif
+
 static K_THREAD_STACK_DEFINE(g_my_stack_area, MY_STACK_SIZE);
 
 struct context {
@@ -41,8 +57,18 @@ struct context {
 	/* topic data, pointed to by the topic table rows below */
 	synapse_topic_OpticalFlowData_t flow;
 	synapse_topic_OpticalFlowVelocityData_t flow_vel;
+	synapse_topic_GnssFix_t gnss;
+	synapse_topic_InertialSample_t imu;
+#if SYNAPSE_ZENOH_RTCM3_INBOUND
+	/* inbound RTCM3 correction bytes, republished on topic_rtcm3 */
+	synapse_pb_Rtcm3 rtcm3;
+#endif
 	/* zenoh */
 	z_owned_session_t session;
+#if SYNAPSE_ZENOH_RTCM3_INBOUND
+	z_owned_subscriber_t rtcm3_reader;
+	struct zros_pub pub_rtcm3;
+#endif
 	/* thread */
 	struct k_sem running;
 	size_t stack_size;
@@ -54,6 +80,11 @@ static struct context g_ctx = {
 	.node = {},
 	.flow = {},
 	.flow_vel = {},
+	.gnss = {},
+	.imu = {},
+#if SYNAPSE_ZENOH_RTCM3_INBOUND
+	.rtcm3 = {},
+#endif
 	.running = Z_SEM_INITIALIZER(g_ctx.running, 1, 1),
 	.stack_size = MY_STACK_SIZE,
 	.stack_area = g_my_stack_area,
@@ -89,6 +120,20 @@ static const struct topic_binding topic_table[] = {
 		.size = sizeof(g_ctx.flow_vel),
 		.key = SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_KEY,
 		.contract = SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_CONTRACT,
+	},
+	{
+		.topic = &topic_nav_sat_fix,
+		.buffer = &g_ctx.gnss,
+		.size = sizeof(g_ctx.gnss),
+		.key = SYNAPSE_TOPIC_GNSS_KEY,
+		.contract = SYNAPSE_TOPIC_GNSS_CONTRACT,
+	},
+	{
+		.topic = &topic_imu,
+		.buffer = &g_ctx.imu,
+		.size = sizeof(g_ctx.imu),
+		.key = SYNAPSE_TOPIC_IMU_KEY,
+		.contract = SYNAPSE_TOPIC_IMU_CONTRACT,
 	},
 };
 
@@ -217,6 +262,76 @@ static void publish_struct(const z_loaned_publisher_t *pub, const void *data, si
 	z_publisher_put(pub, z_move(payload), NULL);
 }
 
+#if SYNAPSE_ZENOH_RTCM3_INBOUND
+/*
+ * Copy the received RTCM3 bytes into the topic buffer and republish them on
+ * topic_rtcm3, where the RTCM3 forwarder picks them up and hands them to the
+ * GNSS receiver. The payload is opaque, so a frame longer than the buffer or a
+ * short read is dropped rather than truncated. Runs in the zenoh read task
+ * (multi-thread) or inside zp_spin_once (single-thread); zros_topic_publish is
+ * thread-safe under both.
+ */
+static void rtcm3_recv_handler(z_loaned_sample_t *sample, void *arg)
+{
+	struct context *ctx = arg;
+	const z_loaned_bytes_t *payload = z_sample_payload(sample);
+	size_t len = z_bytes_len(payload);
+	z_bytes_reader_t reader;
+
+	if (len == 0 || len > sizeof(ctx->rtcm3.data.bytes)) {
+		LOG_WRN("dropping rtcm3 frame of %zu bytes", len);
+		return;
+	}
+
+	reader = z_bytes_get_reader(payload);
+	if (z_bytes_reader_read(&reader, ctx->rtcm3.data.bytes, len) != len) {
+		LOG_WRN("short read on rtcm3 frame");
+		return;
+	}
+
+	ctx->rtcm3.data.size = len;
+	zros_pub_update(&ctx->pub_rtcm3);
+}
+
+static int zenoh_rtcm3_sub_init(struct context *ctx)
+{
+	char keyexpr[KEYEXPR_MAX];
+	z_owned_closure_sample_t closure;
+	z_view_keyexpr_t ke;
+	int ret;
+
+	ret = zros_pub_init(&ctx->pub_rtcm3, &ctx->node, &topic_rtcm3, &ctx->rtcm3);
+	if (ret < 0) {
+		LOG_ERR("init pub rtcm3 failed: %d", ret);
+		return ret;
+	}
+
+	ret = topic_keyexpr(SYNAPSE_TOPIC_RTCM3_KEY, keyexpr, sizeof(keyexpr));
+	if (ret < 0) {
+		LOG_ERR("Key expression too long for %s", SYNAPSE_TOPIC_RTCM3_KEY);
+		return ret;
+	}
+
+	ret = z_view_keyexpr_from_str(&ke, keyexpr);
+	if (ret < 0) {
+		LOG_ERR("Invalid key expression %s", keyexpr);
+		return ret;
+	}
+
+	z_closure_sample(&closure, rtcm3_recv_handler, NULL, ctx);
+
+	ret = z_declare_subscriber(z_loan(ctx->session), &ctx->rtcm3_reader, z_loan(ke),
+				   z_move(closure), NULL);
+	if (ret < 0) {
+		LOG_ERR("Unable to declare subscriber %s", keyexpr);
+		return ret;
+	}
+
+	LOG_INF("Zenoh subscriber %s", keyexpr);
+	return 0;
+}
+#endif /* SYNAPSE_ZENOH_RTCM3_INBOUND */
+
 static int zenoh_init(struct context *ctx)
 {
 	int ret = 0;
@@ -242,6 +357,13 @@ static int zenoh_init(struct context *ctx)
 		return ret;
 	}
 
+#if SYNAPSE_ZENOH_RTCM3_INBOUND
+	ret = zenoh_rtcm3_sub_init(ctx);
+	if (ret < 0) {
+		return ret;
+	}
+#endif
+
 	k_sem_take(&ctx->running, K_FOREVER);
 	LOG_INF("init");
 	return 0;
@@ -249,6 +371,10 @@ static int zenoh_init(struct context *ctx)
 
 static int zenoh_fini(struct context *ctx)
 {
+#if SYNAPSE_ZENOH_RTCM3_INBOUND
+	z_undeclare_subscriber(z_move(ctx->rtcm3_reader));
+	zros_pub_fini(&ctx->pub_rtcm3);
+#endif
 	for (size_t i = 0; i < ARRAY_SIZE(topic_table); i++) {
 		z_undeclare_publisher(z_move(publishers[i]));
 	}
@@ -296,6 +422,9 @@ static void zenoh_run(void *p0, void *p1, void *p2)
 		}
 
 #if Z_FEATURE_MULTI_THREAD == 0
+		/* Also services the inbound rtcm3 subscriber callback, if any.
+		 * In multi-thread builds the read task does this instead.
+		 */
 		zp_spin_once(z_loan(ctx->session));
 #endif
 	}

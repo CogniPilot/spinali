@@ -16,7 +16,6 @@
 #include <synapse_pb/imu.pb.h>
 #include <synapse_pb/input.pb.h>
 #include <synapse_pb/led_array.pb.h>
-#include <synapse_pb/magnetic_field.pb.h>
 #include <synapse_pb/nav_sat_fix.pb.h>
 #include <synapse_pb/odometry.pb.h>
 #include <synapse_pb/pwm.pb.h>
@@ -27,6 +26,9 @@
 #include <synapse_pb/twist.pb.h>
 #include <synapse_pb/vector3.pb.h>
 #include <synapse_pb/wheel_odometry.pb.h>
+
+#include "synapse_gnss_topic.h"
+#include "synapse_imu_topic.h"
 
 #if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) || defined(CONFIG_SPINALI_SYNAPSE_ZENOH)
 #include "synapse_optical_flow_topic.h"
@@ -63,18 +65,17 @@ ZROS_TOPIC_DECLARE(cmd_vel, synapse_pb_Twist);
 ZROS_TOPIC_DECLARE(cmd_vel_ethernet, synapse_pb_Twist);
 ZROS_TOPIC_DECLARE(argus, synapse_pb_ArgusResults);
 ZROS_TOPIC_DECLARE(force_sp, synapse_pb_Vector3);
-ZROS_TOPIC_DECLARE(imu0, synapse_pb_Imu);
-ZROS_TOPIC_DECLARE(imu1, synapse_pb_Imu);
-ZROS_TOPIC_DECLARE(imu2, synapse_pb_Imu);
+ZROS_TOPIC_DECLARE(imu0, synapse_topic_InertialSample_t);
+ZROS_TOPIC_DECLARE(imu1, synapse_topic_InertialSample_t);
+ZROS_TOPIC_DECLARE(imu2, synapse_topic_InertialSample_t);
 ZROS_TOPIC_DECLARE(imu_q31_array, synapse_pb_ImuQ31Array);
 ZROS_TOPIC_DECLARE(input, synapse_pb_Input);
 ZROS_TOPIC_DECLARE(input_sbus, synapse_pb_Input);
 ZROS_TOPIC_DECLARE(input_ethernet, synapse_pb_Input);
 ZROS_TOPIC_DECLARE(led_array, synapse_pb_LEDArray);
-ZROS_TOPIC_DECLARE(magnetic_field, synapse_pb_MagneticField);
 ZROS_TOPIC_DECLARE(moment_ff, synapse_pb_Vector3);
 ZROS_TOPIC_DECLARE(moment_sp, synapse_pb_Vector3);
-ZROS_TOPIC_DECLARE(nav_sat_fix, synapse_pb_NavSatFix);
+ZROS_TOPIC_DECLARE(nav_sat_fix, synapse_topic_GnssFix_t);
 ZROS_TOPIC_DECLARE(odometry_estimator, synapse_pb_Odometry);
 ZROS_TOPIC_DECLARE(odometry_ethernet, synapse_pb_Odometry);
 ZROS_TOPIC_DECLARE(optical_flow_raw, synapse_pb_PixartPAA3905);

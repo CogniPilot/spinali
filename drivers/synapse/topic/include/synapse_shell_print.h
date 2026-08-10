@@ -23,7 +23,6 @@ int snprint_imu(char *buf, size_t n, synapse_pb_Imu *m);
 int snprint_imu_q31_array(char *buf, size_t n, synapse_pb_ImuQ31Array *m);
 int snprint_input(char *buf, size_t n, synapse_pb_Input *m);
 int snprint_ledarray(char *buf, size_t n, synapse_pb_LEDArray *m);
-int snprint_magnetic_field(char *buf, size_t n, synapse_pb_MagneticField *m);
 int snprint_navsatfix(char *buf, size_t n, synapse_pb_NavSatFix *m);
 int snprint_pixart_paa3905(char *buf, size_t n, synapse_pb_PixartPAA3905 *m);
 int snprint_odometry(char *buf, size_t n, synapse_pb_Odometry *m);

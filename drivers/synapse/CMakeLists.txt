@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-add_subdirectory_ifdef(CONFIG_SPINALI_SYNAPSE_ETH_TX eth_tx)
-add_subdirectory_ifdef(CONFIG_SPINALI_SYNAPSE_ETH_RX eth_rx)
 add_subdirectory_ifdef(CONFIG_SPINALI_SYNAPSE_TOPIC topic)
 add_subdirectory_ifdef(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW vehicle_optical_flow)
 add_subdirectory_ifdef(CONFIG_SPINALI_SYNAPSE_ZENOH zenoh)

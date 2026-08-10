@@ -34,22 +34,28 @@ struct synapse_types_Vec2f {
 };
 typedef struct synapse_types_Vec2f synapse_types_Vec2f_t;
 
+#ifndef SYNAPSE_TYPES_VEC3F
+#define SYNAPSE_TYPES_VEC3F
 struct synapse_types_Vec3f {
 	float x;
 	float y;
 	float z;
 };
 typedef struct synapse_types_Vec3f synapse_types_Vec3f_t;
+#endif /* SYNAPSE_TYPES_VEC3F */
 
 /*
  * Discipline state of the clock behind the timestamp_ns fields; mirrors
  * synapse.types.TimeStatus. Stored in the one-byte time_status fields below.
  */
+#ifndef SYNAPSE_TYPES_TIME_STATUS_ENUM
+#define SYNAPSE_TYPES_TIME_STATUS_ENUM
 enum synapse_types_TimeStatus {
 	SYNAPSE_TYPES_TIME_STATUS_LOCAL_FREERUN = 0, /* Undisciplined monotonic boot clock. */
 	SYNAPSE_TYPES_TIME_STATUS_GPTP_SYNCED = 1, /* Disciplined to the gPTP grandmaster. */
 	SYNAPSE_TYPES_TIME_STATUS_GPTP_HOLDOVER = 2, /* Coasting after grandmaster loss. */
 };
+#endif /* SYNAPSE_TYPES_TIME_STATUS_ENUM */
 
 /*
  * Automatic scene light mode reported by the flow sensor; mirrors

@@ -72,7 +72,6 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 		(input_ethernet, &topic_input_ethernet, "input_ethernet"),                         \
 		(input_sbus, &topic_input_sbus, "input_sbus"),                                     \
 		(led_array, &topic_led_array, "led_array"),                                        \
-		(magnetic_field, &topic_magnetic_field, "magnetic_field"),                         \
 		(moment_ff, &topic_moment_ff, "moment_ff"),                                        \
 		(moment_sp, &topic_moment_sp, "moment_sp"),                                        \
 		(nav_sat_fix, &topic_nav_sat_fix, "nav_sat_fix"),                                  \
@@ -287,9 +286,6 @@ void topic_work_handler(struct k_work *work)
 	} else if (topic == &topic_pwm) {
 		synapse_pb_Pwm msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_pwm);
-	} else if (topic == &topic_magnetic_field) {
-		synapse_pb_MagneticField msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_magnetic_field);
 	} else if (topic == &topic_nav_sat_fix) {
 		synapse_pb_NavSatFix msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_navsatfix);

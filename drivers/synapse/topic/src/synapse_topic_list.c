@@ -192,18 +192,17 @@ ZROS_TOPIC_DEFINE(clock_offset_ethernet, synapse_pb_ClockOffset);
 ZROS_TOPIC_DEFINE(cmd_vel, synapse_pb_Twist);
 ZROS_TOPIC_DEFINE(cmd_vel_ethernet, synapse_pb_Twist);
 ZROS_TOPIC_DEFINE(force_sp, synapse_pb_Vector3);
-ZROS_TOPIC_DEFINE(imu0, synapse_pb_Imu);
-ZROS_TOPIC_DEFINE(imu1, synapse_pb_Imu);
-ZROS_TOPIC_DEFINE(imu2, synapse_pb_Imu);
+ZROS_TOPIC_DEFINE(imu0, synapse_topic_InertialSample_t);
+ZROS_TOPIC_DEFINE(imu1, synapse_topic_InertialSample_t);
+ZROS_TOPIC_DEFINE(imu2, synapse_topic_InertialSample_t);
 ZROS_TOPIC_DEFINE(imu_q31_array, synapse_pb_ImuQ31Array);
 ZROS_TOPIC_DEFINE(input, synapse_pb_Input);
 ZROS_TOPIC_DEFINE(input_ethernet, synapse_pb_Input);
 ZROS_TOPIC_DEFINE(input_sbus, synapse_pb_Input);
 ZROS_TOPIC_DEFINE(led_array, synapse_pb_LEDArray);
-ZROS_TOPIC_DEFINE(magnetic_field, synapse_pb_MagneticField);
 ZROS_TOPIC_DEFINE(moment_ff, synapse_pb_Vector3);
 ZROS_TOPIC_DEFINE(moment_sp, synapse_pb_Vector3);
-ZROS_TOPIC_DEFINE(nav_sat_fix, synapse_pb_NavSatFix);
+ZROS_TOPIC_DEFINE(nav_sat_fix, synapse_topic_GnssFix_t);
 ZROS_TOPIC_DEFINE(odometry_estimator, synapse_pb_Odometry);
 ZROS_TOPIC_DEFINE(odometry_ethernet, synapse_pb_Odometry);
 ZROS_TOPIC_DEFINE(optical_flow_raw, synapse_pb_PixartPAA3905);
@@ -243,7 +242,6 @@ static struct zros_topic *topic_list[] = {
 	&topic_input_ethernet,
 	&topic_input_sbus,
 	&topic_led_array,
-	&topic_magnetic_field,
 	&topic_moment_ff,
 	&topic_nav_sat_fix,
 	&topic_odometry_estimator,

@@ -214,20 +214,6 @@ int snprint_ledarray(char *buf, size_t n, synapse_pb_LEDArray *m)
 	return offset;
 }
 
-int snprint_magnetic_field(char *buf, size_t n, synapse_pb_MagneticField *m)
-{
-	size_t offset = 0;
-	if (m->has_stamp) {
-		offset += snprint_timestamp(buf + offset, n - offset, &m->stamp);
-	}
-
-	if (m->has_magnetic_field) {
-		offset += snprint_vector3(buf + offset, n - offset, &m->magnetic_field);
-	}
-
-	return offset;
-}
-
 int snprint_navsatfix(char *buf, size_t n, synapse_pb_NavSatFix *m)
 {
 	size_t offset = 0;
