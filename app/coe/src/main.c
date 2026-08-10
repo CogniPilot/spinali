@@ -7,12 +7,15 @@
  * Linux side can use an IEEE 1722 ACF-CAN bridge for native SocketCAN
  * integration.
  *
- * Each bus owns a 64-bit stream ID (SPINALI_COE_STREAM_ID_BASE + bus index)
- * and its own NTSCF sequence number. Frames queued by the CAN receive
- * callbacks are batched into a single AVTPDU per transmission and sent to
- * SPINALI_COE_DST_MAC, which is replaced by the source MAC of the first
- * valid inbound AVTPDU. Inbound AVTPDUs are demultiplexed by stream ID and
- * their ACF-CAN messages are queued to the matching bus, which owns a writer
+ * Each bus owns a 64-bit IEEE 1722 stream ID: the interface MAC in the upper
+ * 48 bits and the bus stream index (SPINALI_COE_STREAM_UID_BASE + bus) in the
+ * lower 16, so a node's streams are unique on the network without
+ * coordination. It also owns its own NTSCF sequence number. Frames queued by
+ * the CAN receive callbacks are batched into a single AVTPDU per transmission
+ * and sent to SPINALI_COE_DST_MAC, which is replaced by the source MAC of the
+ * first valid inbound AVTPDU. Inbound AVTPDUs are demultiplexed by the low 16
+ * bit stream index and their ACF-CAN messages are queued to the matching bus,
+ * which owns a writer
  * thread of its own so that a bus without a peer to acknowledge its frames
  * cannot hold up the other bus or the packet socket.
  *
@@ -88,8 +91,13 @@ LOG_MODULE_REGISTER(coe, CONFIG_SPINALI_COE_LOG_LEVEL);
 /* Pause after a packet socket receive error, so a persistent fault cannot spin. */
 #define COE_RX_ERR_BACKOFF_MS 10U
 
-/* The Kconfig default exceeds 32 bits, so widen it before any arithmetic. */
-#define COE_STREAM_ID_BASE ((uint64_t)CONFIG_SPINALI_COE_STREAM_ID_BASE)
+/*
+ * IEEE 1722 stream IDs carry the talker's 48 bit MAC in the upper bits and a
+ * 16 bit stream index in the lower bits, so every talker's streams are unique
+ * on the network without coordination. Bus N uses index UID_BASE + N.
+ */
+#define COE_STREAM_UID_BASE ((uint16_t)CONFIG_SPINALI_COE_STREAM_UID_BASE)
+#define COE_STREAM_ID(mac48, uid) (((uint64_t)(mac48) << 16) | (uint64_t)(uint16_t)(uid))
 
 BUILD_ASSERT(COE_PDU_MAX - COE_NTSCF_HDR_LEN <= COE_NTSCF_DATA_LEN_MAX,
 	     "AVTPDU payload must fit the 11 bit ntscf_data_length field");
@@ -497,9 +505,17 @@ static void coe_rx_thread(void *a, void *b, void *c)
 		}
 
 		uint64_t stream_id = sys_get_be64(&pdu[4]);
-		uint64_t index = stream_id - COE_STREAM_ID_BASE;
+		uint16_t uid = (uint16_t)(stream_id & 0xFFFFU);
 
-		if (stream_id < COE_STREAM_ID_BASE || index >= COE_BUS_COUNT) {
+		/*
+		 * Demultiplex on the low 16 bit stream index only: the upper 48
+		 * bits are the talker's MAC, which differs from ours, so bus N at
+		 * the far end maps to bus N here. A uid below the base underflows
+		 * to a large value and is rejected by the bounds check.
+		 */
+		uint32_t index = (uint32_t)((int)uid - (int)COE_STREAM_UID_BASE);
+
+		if (index >= COE_BUS_COUNT) {
 			continue;
 		}
 
@@ -646,6 +662,22 @@ int main(void)
 	}
 
 	/*
+	 * The talker half of every stream ID is this interface's MAC address,
+	 * which the unique-mac driver derives from the chip UUID, so the stream
+	 * IDs are stable and unique per board with no coordination.
+	 */
+	uint64_t mac48 = 0;
+	struct net_linkaddr *ll = net_if_get_link_addr(net_if_get_default());
+
+	if (ll != NULL && ll->len == 6U) {
+		for (int b = 0; b < 6; b++) {
+			mac48 = (mac48 << 8) | ll->addr[b];
+		}
+	} else {
+		LOG_ERR("interface MAC unavailable; stream IDs will not be unique");
+	}
+
+	/*
 	 * The clock that timestamps arriving frames is the one the Ethernet MAC
 	 * already runs for gPTP, so a timestamp on the wire means the same
 	 * instant to every node the grandmaster serves. It is resolved once
@@ -713,7 +745,7 @@ int main(void)
 	for (uint8_t i = 0; i < COE_BUS_COUNT; i++) {
 		struct coe_bus *bus = &g_bus[i];
 
-		bus->stream_id = COE_STREAM_ID_BASE + i;
+		bus->stream_id = COE_STREAM_ID(mac48, COE_STREAM_UID_BASE + i);
 
 		if (!device_is_ready(bus->dev)) {
 			LOG_ERR("can%u not ready", i);

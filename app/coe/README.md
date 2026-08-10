@@ -22,14 +22,16 @@ frame. Design rationale and the full validation record live in
 ## Data path
 
 ```
-flexcan0 (J3/J4) <-> queue -> batch/encode -> NTSCF stream base+0 <-> peer
-flexcan1 (J6/J7) <-> queue -> batch/encode -> NTSCF stream base+1 <-> peer
+flexcan0 (J3/J4) <-> queue -> batch/encode -> NTSCF stream mac|0 <-> peer
+flexcan1 (J6/J7) <-> queue -> batch/encode -> NTSCF stream mac|1 <-> peer
 ```
 
-Each bus owns one 64-bit stream ID, `SPINALI_COE_STREAM_ID_BASE + bus
-index`, used in both directions: the hub stamps it on everything it
-transmits for that bus and accepts inbound AVTPDUs for that bus only
-under it. Unknown stream IDs are ignored. The buses are bridged
+Each bus owns one 64-bit IEEE 1722 stream ID: the interface MAC in the
+upper 48 bits and the stream index `SPINALI_COE_STREAM_UID_BASE + bus`
+in the lower 16, so a node's streams are unique on the network without
+coordination. The hub stamps it on everything it transmits for that bus,
+and inbound AVTPDUs are matched to a bus by their low 16 bit stream
+index. The buses are bridged
 independently and never forward to each other; inbound frames pass
 through a per-bus queue and writer thread, so a bus with no peer to
 acknowledge its frames cannot stall the other bus.
@@ -154,7 +156,7 @@ west flash
 
 | Option | Default | Meaning |
 |---|---|---|
-| `SPINALI_COE_STREAM_ID_BASE` | 0x00CAFE0000000000 | stream ID for bus 0; bus N uses base + N |
+| `SPINALI_COE_STREAM_UID_BASE` | 0x0000 | 16-bit stream index for bus 0; the full stream ID is the interface MAC in the upper 48 bits and the index in the lower 16 |
 | `SPINALI_COE_DST_MAC` | 91:E0:F0:00:0C:0E | destination until a peer is learned from traffic |
 | `CAN_DEFAULT_BITRATE` / `_DATA` | 1 M / 4 M | bus bit timing |
 

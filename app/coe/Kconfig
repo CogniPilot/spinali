@@ -8,13 +8,16 @@ endmenu
 
 menu "COE"
 
-config SPINALI_COE_STREAM_ID_BASE
-  hex "Base IEEE 1722 stream ID"
-  default 0x00CAFE0000000000
+config SPINALI_COE_STREAM_UID_BASE
+  hex "Base IEEE 1722 stream index"
+  default 0x0000
+  range 0 0xffff
   help
-    Bus N transmits and accepts NTSCF AVTPDUs whose 64 bit stream ID is
-    STREAM_ID_BASE + N. Inbound AVTPDUs carrying any other stream ID are
-    ignored. The listener at the far end must use the same base.
+    IEEE 1722 stream IDs are formed as the talker interface MAC address in
+    the upper 48 bits and a 16 bit stream index in the lower 16 bits, so
+    every node's streams are unique on the network without coordination.
+    Bus N transmits and accepts the stream index STREAM_UID_BASE + N. Leave
+    this at zero unless one node must expose more than one CAN bus group.
 
 config SPINALI_COE_DST_MAC
   string "Destination MAC address for outbound AVTPDUs"
