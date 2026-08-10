@@ -93,6 +93,9 @@ static inline bool gyro_ring_buffer_pop_oldest(struct gyro_ring_buffer *rb,
 struct range_sample {
 	uint64_t time_us;
 	float data;
+	uint8_t signal_quality; /* fused AFBR bin signal quality, 0 to 100 */
+	float spread_m; /* max minus min range over PIXEL_OK pixels, meters */
+	uint8_t pixel_ok; /* count of PIXEL_OK pixels, 0 to 32 */
 };
 
 struct range_ring_buffer {

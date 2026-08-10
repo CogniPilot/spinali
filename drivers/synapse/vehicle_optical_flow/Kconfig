@@ -51,6 +51,16 @@ config VOF_MAXHGT
 	help
 	  Maximum reliable ground distance in centimeters.
 
+config VOF_MAXSPREAD
+	int "Max range spread before ambiguous (cm)"
+	default 5
+	help
+	  Largest per-pixel range spread, in centimeters, still treated as a
+	  single unambiguous surface. The AFBR-S50 reports a range per pixel;
+	  when the spread between the closest and farthest PIXEL_OK pixels
+	  exceeds this, the footprint straddles more than one surface and the
+	  fused distance is flagged DistanceAmbiguous. 5 = 0.05 m.
+
 config VOF_MAXR
 	int "Max flow rate (x100 rad/s)"
 	default 800

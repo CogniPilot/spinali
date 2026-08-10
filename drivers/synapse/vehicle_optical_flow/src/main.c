@@ -14,6 +14,7 @@
 #include <math.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/net/gptp.h>
 #include <zephyr/shell/shell.h>
 
 #include <../drivers/sensor/pixart/paa3905/paa3905_reg.h>
@@ -40,7 +41,22 @@ LOG_MODULE_REGISTER(vehicle_optical_flow, CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW_LO
 #define VOF_MAXHGT    (CONFIG_VOF_MAXHGT * 0.01f)
 #define VOF_MAXR      (CONFIG_VOF_MAXR * 0.01f)
 #define VOF_SENS      (CONFIG_VOF_SENS * 0.01f)
+#define VOF_MAXSPREAD (CONFIG_VOF_MAXSPREAD * 0.01f)
 #define VOF_MAXFRAME_US (CONFIG_VOF_MAXFRAME * 1000U)
+
+/*
+ * Accelerometer tilt estimate. The imu accel stream is body specific force in
+ * m/s^2, so at rest its magnitude sits near gravity. VOF_TILT_TAU_S is the
+ * complementary-filter time constant: the estimate follows the gyro over spans
+ * shorter than it and settles onto the accelerometer over longer ones. The
+ * accelerometer is trusted for the correction only while its magnitude stays
+ * within the band around gravity, which rejects the specific force of
+ * maneuvers that would otherwise be read as tilt.
+ */
+#define VOF_GRAVITY_M_S2 9.80665f
+#define VOF_TILT_TAU_S   0.5f
+#define VOF_TILT_ACC_LO  (0.5f * VOF_GRAVITY_M_S2)
+#define VOF_TILT_ACC_HI  (1.5f * VOF_GRAVITY_M_S2)
 
 static K_THREAD_STACK_DEFINE(g_my_stack_area, MY_STACK_SIZE);
 
@@ -73,8 +89,25 @@ struct context {
 	uint16_t quality_pct_sum;
 	uint8_t accumulated_count;
 	uint8_t quality_pct_last;
+	bool delta_angle_valid;
+	int64_t range_timestamp_last_us;
+	uint8_t distance_quality_last;
+	float distance_spread_last;
+	uint8_t distance_pixel_ok_last;
 	int64_t flow_timestamp_sample_last_us;
 	int64_t gyro_timestamp_sample_last_us;
+	/* accelerometer tilt estimate, body FLU relative to level, radians */
+	float tilt_roll_rad;
+	float tilt_pitch_rad;
+	bool tilt_valid;
+	/* cumulative health, not cleared between windows */
+	uint32_t error_count;
+	/*
+	 * gPTP discipline latch: set the first time a grandmaster is seen and
+	 * never cleared, so a later loss is published as holdover rather than as
+	 * never-synchronized.
+	 */
+	bool time_ever_synced;
 	/* thread */
 	struct k_sem running;
 	size_t stack_size;
@@ -105,8 +138,18 @@ static struct context g_ctx = {
 	.quality_pct_sum = 0,
 	.accumulated_count = 0,
 	.quality_pct_last = 0,
+	.delta_angle_valid = false,
+	.range_timestamp_last_us = 0,
+	.distance_quality_last = 0,
+	.distance_spread_last = 0.0f,
+	.distance_pixel_ok_last = 0,
 	.flow_timestamp_sample_last_us = 0,
 	.gyro_timestamp_sample_last_us = 0,
+	.tilt_roll_rad = 0.0f,
+	.tilt_pitch_rad = 0.0f,
+	.tilt_valid = false,
+	.error_count = 0,
+	.time_ever_synced = false,
 	.running = Z_SEM_INITIALIZER(g_ctx.running, 1, 1),
 	.stack_size = MY_STACK_SIZE,
 	.stack_area = g_my_stack_area,
@@ -130,6 +173,11 @@ static void clear_accumulated_data(struct context *ctx)
 	ctx->distance_sum_count = 0;
 	ctx->quality_pct_sum = 0;
 	ctx->accumulated_count = 0;
+	ctx->delta_angle_valid = false;
+	ctx->range_timestamp_last_us = 0;
+	ctx->distance_quality_last = 0;
+	ctx->distance_spread_last = 0.0f;
+	ctx->distance_pixel_ok_last = 0;
 	integrator_coning_reset(&ctx->gyro_integrator);
 }
 
@@ -148,6 +196,84 @@ static void sensor_xy_to_flu(float sensor_x, float sensor_y, float *flu_x, float
 {
 	*flu_x = sensor_y;
 	*flu_y = -sensor_x;
+}
+
+/*
+ * Estimate the body FLU roll and pitch relative to the level frame from the
+ * accelerometer, blended with the gyro. The same imu sample carries the accel
+ * in the same raw chip axes as the gyro, so it maps into body FLU the same way.
+ *
+ * At rest the accelerometer reads the reaction to gravity, +z in body FLU when
+ * level, so atan2 of its components recovers the tilt directly:
+ *
+ *   roll  = atan2(a_y, a_z)
+ *   pitch = atan2(-a_x, hypot(a_y, a_z))
+ *
+ * A complementary blend integrates the gyro over each interval and eases the
+ * result back toward the accelerometer, so brief specific-force transients do
+ * not throw the tilt while a steady gravity vector still disciplines the gyro
+ * drift. The gyro-only branches keep the estimate coasting when the accel is
+ * absent or off-magnitude, once a trustworthy gravity vector has seeded it.
+ * gyro_roll_rate and gyro_pitch_rate are the body FLU rates about +x and +y.
+ */
+static void update_tilt_estimate(struct context *ctx, const synapse_pb_Imu *imu,
+				 float gyro_roll_rate, float gyro_pitch_rate, float dt_s)
+{
+	float roll_pred = ctx->tilt_roll_rad + gyro_roll_rate * dt_s;
+	float pitch_pred = ctx->tilt_pitch_rad + gyro_pitch_rate * dt_s;
+
+	if (!imu->has_linear_acceleration) {
+		if (ctx->tilt_valid) {
+			ctx->tilt_roll_rad = roll_pred;
+			ctx->tilt_pitch_rad = pitch_pred;
+		}
+		return;
+	}
+
+	float a_flu_x;
+	float a_flu_y;
+
+	sensor_xy_to_flu((float)imu->linear_acceleration.x, (float)imu->linear_acceleration.y,
+			 &a_flu_x, &a_flu_y);
+
+	float a_flu_z = (float)imu->linear_acceleration.z;
+	float a_mag = sqrtf(a_flu_x * a_flu_x + a_flu_y * a_flu_y + a_flu_z * a_flu_z);
+
+	bool acc_usable =
+		isfinite(a_mag) && a_mag >= VOF_TILT_ACC_LO && a_mag <= VOF_TILT_ACC_HI;
+
+	if (!acc_usable) {
+		/* off-magnitude specific force: coast on the gyro once seeded */
+		if (ctx->tilt_valid) {
+			ctx->tilt_roll_rad = roll_pred;
+			ctx->tilt_pitch_rad = pitch_pred;
+		}
+		return;
+	}
+
+	float roll_acc = atan2f(a_flu_y, a_flu_z);
+	float pitch_acc = atan2f(-a_flu_x, hypotf(a_flu_y, a_flu_z));
+
+	if (!isfinite(roll_acc) || !isfinite(pitch_acc)) {
+		return;
+	}
+
+	if (!ctx->tilt_valid) {
+		/* first trustworthy gravity vector seeds the estimate */
+		ctx->tilt_roll_rad = roll_acc;
+		ctx->tilt_pitch_rad = pitch_acc;
+		ctx->tilt_valid = true;
+		return;
+	}
+
+	float alpha = VOF_TILT_TAU_S / (VOF_TILT_TAU_S + dt_s);
+	float roll = alpha * roll_pred + (1.0f - alpha) * roll_acc;
+	float pitch = alpha * pitch_pred + (1.0f - alpha) * pitch_acc;
+
+	if (isfinite(roll) && isfinite(pitch)) {
+		ctx->tilt_roll_rad = roll;
+		ctx->tilt_pitch_rad = pitch;
+	}
 }
 
 static void update_gyro_buffer(struct context *ctx)
@@ -178,6 +304,9 @@ static void update_gyro_buffer(struct context *ctx)
 	sample.data[2] = (float)imu->angular_velocity.z;
 
 	gyro_ring_buffer_push(&ctx->gyro_buffer, &sample);
+
+	/* fold the same sample into the accelerometer tilt estimate */
+	update_tilt_estimate(ctx, imu, sample.data[0], sample.data[1], dt_s);
 }
 
 static void update_range_buffer(struct context *ctx)
@@ -201,9 +330,53 @@ static void update_range_buffer(struct context *ctx)
 
 	int64_t timestamp_us = timestamp_from_pb(&argus->stamp);
 
+	/*
+	 * Summarize the per-pixel footprint that produced this range. The AFBR
+	 * reports a range per pixel; the spread between the closest and farthest
+	 * pixels that read PIXEL_OK tells a consumer whether the fused range
+	 * describes one surface or straddles several. The pixel array is only
+	 * present when the argus stream runs in pointcloud or verbose mode; with
+	 * pixel_count zero both summaries stay at their neutral values.
+	 */
+	float spread_m = 0.0f;
+	uint8_t pixel_ok = 0;
+	float min_r = 0.0f;
+	float max_r = 0.0f;
+
+	for (size_t i = 0; i < argus->pixel_count && i < 32U; i++) {
+		if (argus->pixel[i].status !=
+		    synapse_pb_ArgusPixel_Pixel_Status_PIXEL_STATUS_OK) {
+			continue;
+		}
+
+		float pixel_range = argus->pixel[i].range;
+
+		if (!isfinite(pixel_range)) {
+			continue;
+		}
+
+		if (pixel_ok == 0) {
+			min_r = pixel_range;
+			max_r = pixel_range;
+		} else if (pixel_range < min_r) {
+			min_r = pixel_range;
+		} else if (pixel_range > max_r) {
+			max_r = pixel_range;
+		}
+
+		pixel_ok++;
+	}
+
+	if (pixel_ok > 0) {
+		spread_m = max_r - min_r;
+	}
+
 	struct range_sample sample = {
 		.time_us = (uint64_t)timestamp_us,
 		.data = range_m,
+		.signal_quality = (uint8_t)argus->bin.signal_quality,
+		.spread_m = spread_m,
+		.pixel_ok = pixel_ok,
 	};
 
 	range_ring_buffer_push(&ctx->range_buffer, &sample);
@@ -271,6 +444,90 @@ static uint8_t squal_to_quality_pct(uint8_t squal, uint8_t mode)
 	return (uint8_t)(((uint32_t)(squal - squal_min) * 100U) / (UINT8_MAX - squal_min));
 }
 
+/* Rescale a 0-to-100 percentage onto the 0-to-255 range the wire schema uses. */
+static uint8_t quality_pct_to_u8(uint8_t pct)
+{
+	if (pct >= 100U) {
+		return UINT8_MAX;
+	}
+
+	return (uint8_t)(((uint32_t)pct * UINT8_MAX + 50U) / 100U);
+}
+
+/* Map the PAA3905 observation mode onto the wire FlowLightMode enum. */
+static uint8_t flow_light_mode_from_pb(uint8_t pb_mode)
+{
+	switch (pb_mode) {
+	case synapse_pb_PixartPAA3905_Mode_MODE_BRIGHT:
+		return SYNAPSE_TOPIC_FLOW_LIGHT_MODE_BRIGHT;
+	case synapse_pb_PixartPAA3905_Mode_MODE_LOW_LIGHT:
+		return SYNAPSE_TOPIC_FLOW_LIGHT_MODE_LOW_LIGHT;
+	case synapse_pb_PixartPAA3905_Mode_MODE_SUPER_LOW_LIGHT:
+		return SYNAPSE_TOPIC_FLOW_LIGHT_MODE_SUPER_LOW_LIGHT;
+	default:
+		return SYNAPSE_TOPIC_FLOW_LIGHT_MODE_UNKNOWN;
+	}
+}
+
+/*
+ * Resolve this node's clock discipline state and, when it is on the shared
+ * timescale, the offset that carries a boot-clock timestamp onto it.
+ *
+ * The node runs the gPTP slave stack (CONFIG_NET_GPTP without GM_CAPABLE), so
+ * its Ethernet MAC PTP hardware clock (PHC) is steered to follow the
+ * grandmaster the coe node serves over the T1 link. gptp_event_capture reads
+ * that slave PHC and reports whether a grandmaster is currently present.
+ *
+ * The sensor sample stamps are taken from the free-running kernel boot clock,
+ * a different clock from the PHC, so a boot-clock timestamp is placed on the
+ * shared timescale by adding the offset between the two clocks read at the same
+ * instant: offset = phc_now - boot_now. Every timestamp in one published
+ * message is shifted by that one offset, so the window structure (sample
+ * centre, integration span, range time) is preserved while its absolute
+ * reference moves onto the GNSS-traceable domain.
+ *
+ * time_status names the domain honestly: GptpSynced while a grandmaster is
+ * present, GptpHoldover once one has been lost after a prior lock (the PHC then
+ * coasts on the last learned rate), and LocalFreerun before any lock or when
+ * the gPTP stack is absent, where the offset stays zero and the stamps remain
+ * node-local monotonic boot time.
+ */
+static uint8_t resolve_time_status(struct context *ctx, int64_t *offset_ns)
+{
+	*offset_ns = 0;
+
+#if defined(CONFIG_NET_GPTP)
+	struct net_ptp_time phc;
+	bool gm_present = false;
+
+	/* no slave PHC available yet (gPTP not up): stay on node-local time */
+	if (gptp_event_capture(&phc, &gm_present) != 0) {
+		return SYNAPSE_TYPES_TIME_STATUS_LOCAL_FREERUN;
+	}
+
+	/* never disciplined: the PHC carries no traceable meaning to claim */
+	if (!gm_present && !ctx->time_ever_synced) {
+		return SYNAPSE_TYPES_TIME_STATUS_LOCAL_FREERUN;
+	}
+
+	int64_t phc_now_ns = (int64_t)phc.second * 1000000000LL + (int64_t)phc.nanosecond;
+	int64_t boot_now_ns = k_ticks_to_ns_floor64(k_uptime_ticks());
+
+	*offset_ns = phc_now_ns - boot_now_ns;
+
+	if (gm_present) {
+		ctx->time_ever_synced = true;
+		return SYNAPSE_TYPES_TIME_STATUS_GPTP_SYNCED;
+	}
+
+	/* was synced, grandmaster lost: the disciplined PHC now coasts */
+	return SYNAPSE_TYPES_TIME_STATUS_GPTP_HOLDOVER;
+#else
+	ARG_UNUSED(ctx);
+	return SYNAPSE_TYPES_TIME_STATUS_LOCAL_FREERUN;
+#endif
+}
+
 static void process_optical_flow(struct context *ctx)
 {
 	const synapse_pb_PixartPAA3905 *flow = &ctx->optical_flow_raw;
@@ -301,6 +558,7 @@ static void process_optical_flow(struct context *ctx)
 		if (!dt_usable || (mean_us > 0U && (uint64_t)dt > (uint64_t)mean_us * 2U)) {
 			LOG_DBG("flow gap %lld us, dropping %u frames", (long long)dt,
 				ctx->accumulated_count);
+			ctx->error_count++;
 			clear_accumulated_data(ctx);
 		}
 	}
@@ -369,6 +627,7 @@ static void process_optical_flow(struct context *ctx)
 		ctx->delta_angle_flu[0] += delta_angle_flu[0];
 		ctx->delta_angle_flu[1] += delta_angle_flu[1];
 		ctx->delta_angle_flu[2] += delta_angle_flu[2];
+		ctx->delta_angle_valid = true;
 	} else {
 		integrator_coning_reset(&ctx->gyro_integrator);
 	}
@@ -385,6 +644,12 @@ static void process_optical_flow(struct context *ctx)
 			ctx->distance_sum += range_sample.data;
 			ctx->distance_sum_count++;
 		}
+
+		/* track the range sample folded into distance_m (most recent match) */
+		ctx->range_timestamp_last_us = (int64_t)range_sample.time_us;
+		ctx->distance_quality_last = range_sample.signal_quality;
+		ctx->distance_spread_last = range_sample.spread_m;
+		ctx->distance_pixel_ok_last = range_sample.pixel_ok;
 	}
 
 	/* accumulate */
@@ -414,29 +679,102 @@ static void process_optical_flow(struct context *ctx)
 
 	memset(vof, 0, sizeof(*vof));
 
-	vof->timestamp_us = (uint64_t)timestamp_us;
+	/*
+	 * All wire time fields are nanoseconds. The source stamps are the
+	 * microsecond boot clock, so scale by 1000. When this node is disciplined
+	 * as a gPTP slave, time_offset_ns carries those boot-clock stamps onto the
+	 * shared grandmaster timescale; before the first lock it is zero and the
+	 * stamps stay node-local monotonic boot time. time_status names the domain
+	 * the stamps are on. The same offset and status are applied to the velocity
+	 * message below, so both messages agree.
+	 */
+	int64_t time_offset_ns = 0;
+	uint8_t time_status = resolve_time_status(ctx, &time_offset_ns);
+
+	vof->timestamp_ns = (uint64_t)((int64_t)timestamp_us * 1000LL + time_offset_ns);
+
+	/* the window runs back from timestamp_us over integration_timespan_us */
+	int64_t sample_center_us = timestamp_us - (int64_t)ctx->integration_timespan_us / 2;
+
+	vof->timestamp_sample_ns = (uint64_t)(sample_center_us * 1000LL + time_offset_ns);
+
 	vof->flow_rad.x = ctx->flow_rad[0];
 	vof->flow_rad.y = ctx->flow_rad[1];
 	vof->delta_angle_flu_rad.x = ctx->delta_angle_flu[0];
 	vof->delta_angle_flu_rad.y = ctx->delta_angle_flu[1];
 	vof->delta_angle_flu_rad.z = ctx->delta_angle_flu[2];
-	vof->integration_timespan_us = ctx->integration_timespan_us;
-	vof->quality_pct = (uint8_t)(ctx->quality_pct_sum / ctx->accumulated_count);
 
-	/*
-	 * The schema has no validity flag, so an unmatched window leaves
-	 * distance_m at NAN and a consumer has to isfinite-gate it. The
-	 * velocity message is simply not published for such a window.
-	 */
-	if (ctx->distance_sum_count > 0 && isfinite(ctx->distance_sum)) {
-		vof->distance_m = ctx->distance_sum / (float)ctx->distance_sum_count;
-	} else {
-		vof->distance_m = NAN;
+	vof->integration_timespan_ns =
+		(uint32_t)((uint64_t)ctx->integration_timespan_us * 1000ULL);
+
+	uint8_t quality_pct_mean = (uint8_t)(ctx->quality_pct_sum / ctx->accumulated_count);
+
+	vof->quality = quality_pct_to_u8(quality_pct_mean);
+
+	bool distance_valid = (ctx->distance_sum_count > 0 && isfinite(ctx->distance_sum));
+	float distance_mean = 0.0f;
+
+	if (distance_valid) {
+		distance_mean = ctx->distance_sum / (float)ctx->distance_sum_count;
+		vof->distance_m = distance_mean;
+		vof->distance_timestamp_ns =
+			(uint64_t)(ctx->range_timestamp_last_us * 1000LL + time_offset_ns);
+		vof->distance_quality = quality_pct_to_u8(ctx->distance_quality_last);
+
+		/*
+		 * Per-pixel AFBR footprint of the matched range: the spread and
+		 * the PIXEL_OK count carried alongside it through the range ring
+		 * buffer. With the argus stream in bin-only mode there are no
+		 * pixels, so both stay zero.
+		 */
+		vof->distance_spread_m = ctx->distance_spread_last;
+		vof->distance_pixel_ok = ctx->distance_pixel_ok_last;
 	}
 
 	vof->max_flow_rate_rad_s = VOF_MAXR;
 	vof->min_ground_distance_m = VOF_MINHGT;
 	vof->max_ground_distance_m = VOF_MAXHGT;
+
+	/* no field-of-view config or devicetree constant is exposed to this node */
+	vof->field_of_view_rad = 0.0f;
+
+	/*
+	 * No Celsius-calibrated temperature source is available: the PAA3905
+	 * reports none and the AFBR auxiliary temperature is a raw ADC channel,
+	 * not degrees Celsius. NAN marks it unavailable rather than implying 0 C.
+	 */
+	vof->temperature_c = NAN;
+
+	vof->mode = flow_light_mode_from_pb((uint8_t)flow->mode);
+	vof->error_count = ctx->error_count;
+
+	uint8_t flow_flags = 0;
+
+	if (quality_pct_mean > 0U) {
+		flow_flags |= SYNAPSE_TOPIC_OPTICAL_FLOW_FLAG_FLOW_VALID;
+	}
+	if (ctx->delta_angle_valid) {
+		flow_flags |= SYNAPSE_TOPIC_OPTICAL_FLOW_FLAG_DELTA_ANGLE_VALID;
+	}
+	if (distance_valid) {
+		flow_flags |= SYNAPSE_TOPIC_OPTICAL_FLOW_FLAG_DISTANCE_VALID;
+	}
+	/*
+	 * A per-pixel spread beyond VOF_MAXSPREAD means the footprint straddles
+	 * more than one surface, so the fused distance is ambiguous. This needs
+	 * at least one PIXEL_OK reading; with no pixels the spread is zero and
+	 * the flag stays clear.
+	 */
+	if (distance_valid && ctx->distance_pixel_ok_last > 0 &&
+	    ctx->distance_spread_last > VOF_MAXSPREAD) {
+		flow_flags |= SYNAPSE_TOPIC_OPTICAL_FLOW_FLAG_DISTANCE_AMBIGUOUS;
+	}
+	vof->flags = flow_flags;
+
+	vof->time_status = time_status;
+
+	/* single flow-sensor instance on this node */
+	vof->id = 0U;
 
 	zros_pub_update(&ctx->pub_optical_flow);
 
@@ -447,9 +785,8 @@ static void process_optical_flow(struct context *ctx)
 	 * span there is nothing to divide it by. Staying silent says that; a
 	 * message of zeroes would instead say the vehicle is stationary.
 	 */
-	if (ctx->distance_sum_count > 0 && isfinite(ctx->distance_sum) &&
-	    ctx->integration_timespan_us > 0U) {
-		float range = ctx->distance_sum / (float)ctx->distance_sum_count;
+	if (distance_valid && ctx->integration_timespan_us > 0U) {
+		float range = distance_mean;
 		float flow_dt = 1e-6f * (float)ctx->integration_timespan_us;
 
 		synapse_topic_OpticalFlowVelocityData_t *vel = &ctx->optical_flow_vel;
@@ -465,29 +802,96 @@ static void process_optical_flow(struct context *ctx)
 		};
 
 		memset(vel, 0, sizeof(*vel));
-		vel->timestamp_us = (uint64_t)timestamp_us;
+		vel->timestamp_ns = (uint64_t)((int64_t)timestamp_us * 1000LL + time_offset_ns);
 
 		/*
-		 * Over a flat surface at range, forward travel sweeps the
-		 * boresight about +y and leftward travel sweeps it about -x.
-		 * Valid only while level: there is no tilt compensation here.
+		 * v_perp is the ground velocity perpendicular to the boresight:
+		 * the rotation-compensated flow rate scaled by the measured
+		 * range. This is slope-safe because it uses the range the sensor
+		 * actually saw, not a range*cos(tilt) height that would assume
+		 * flat ground. In body FLU, forward travel sweeps the boresight
+		 * about +y and leftward travel sweeps it about -x, so in the body
+		 * plane:
 		 */
-		vel->velocity_flu_m_s.x = range * compensated[1] / flow_dt;
-		vel->velocity_flu_m_s.y = -range * compensated[0] / flow_dt;
+		float v_perp_fwd = range * compensated[1] / flow_dt;
+		float v_perp_left = -range * compensated[0] / flow_dt;
 
-		/* ENU needs an attitude source this node does not have */
-		vel->velocity_enu_m_s.x = NAN;
-		vel->velocity_enu_m_s.y = NAN;
+		/*
+		 * Tilt compensation. The accelerometer-derived roll (r) and pitch
+		 * (p) give the body attitude relative to the level frame. v_perp
+		 * lies in the body plane, so its body-z component is zero;
+		 * rotating it into the level frame with R = Ry(p) Rx(r) and
+		 * keeping the horizontal part gives the ground velocity in the
+		 * level FLU frame:
+		 *
+		 *   v_level_x = cos(p) v_fwd + sin(p) sin(r) v_left
+		 *   v_level_y =                cos(r) v_left
+		 *
+		 * The discarded z row is the unobservable along-boresight
+		 * component. With a valid tilt this replaces the level-only
+		 * mapping; otherwise the body-plane v_perp is published as is and
+		 * TiltCompensated stays clear.
+		 */
+		bool tilt_ok = ctx->tilt_valid && isfinite(ctx->tilt_roll_rad) &&
+			       isfinite(ctx->tilt_pitch_rad);
+		float vel_fwd = v_perp_fwd;
+		float vel_left = v_perp_left;
+		float roll_out = 0.0f;
+		float pitch_out = 0.0f;
+		bool tilt_applied = false;
 
-		/* rates carry the physical sign of the quantity they name */
-		vel->flow_rate_uncompensated_rad_s.x = ctx->flow_rad[0] / flow_dt;
-		vel->flow_rate_uncompensated_rad_s.y = ctx->flow_rad[1] / flow_dt;
-		vel->flow_rate_compensated_rad_s.x = compensated[0] / flow_dt;
-		vel->flow_rate_compensated_rad_s.y = compensated[1] / flow_dt;
+		if (tilt_ok) {
+			float r = ctx->tilt_roll_rad;
+			float p = ctx->tilt_pitch_rad;
+			float cr = cosf(r);
+			float sr = sinf(r);
+			float cp = cosf(p);
+			float sp = sinf(p);
+			float lvl_fwd = cp * v_perp_fwd + sp * sr * v_perp_left;
+			float lvl_left = cr * v_perp_left;
 
-		vel->gyro_flu_rad_s.x = ctx->delta_angle_flu[0] / flow_dt;
-		vel->gyro_flu_rad_s.y = ctx->delta_angle_flu[1] / flow_dt;
-		vel->gyro_flu_rad_s.z = ctx->delta_angle_flu[2] / flow_dt;
+			if (isfinite(lvl_fwd) && isfinite(lvl_left)) {
+				vel_fwd = lvl_fwd;
+				vel_left = lvl_left;
+				roll_out = r;
+				pitch_out = p;
+				tilt_applied = true;
+			}
+		}
+
+		vel->velocity_flu_m_s.x = vel_fwd;
+		vel->velocity_flu_m_s.y = vel_left;
+
+		vel->distance_m = range;
+
+		/*
+		 * roll_rad and pitch_rad report the attitude the velocity was
+		 * corrected for; both stay zero when no valid tilt was applied,
+		 * matching the cleared TiltCompensated flag.
+		 */
+		vel->roll_rad = roll_out;
+		vel->pitch_rad = pitch_out;
+
+		/* combined confidence is limited by the weaker of flow and range */
+		uint8_t range_quality = quality_pct_to_u8(ctx->distance_quality_last);
+
+		vel->quality = (vof->quality < range_quality) ? vof->quality : range_quality;
+
+		uint8_t vel_flags = SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_FLAG_VELOCITY_VALID;
+
+		/* set only when a valid roll/pitch actually rotated the velocity */
+		if (tilt_applied) {
+			vel_flags |= SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_FLAG_TILT_COMPENSATED;
+		}
+
+		/* the buffered range already passed the ground-distance gate */
+		if (range >= VOF_MINHGT && range <= VOF_MAXHGT) {
+			vel_flags |= SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_FLAG_RANGE_TRUSTED;
+		}
+		vel->flags = vel_flags;
+
+		vel->time_status = time_status;
+		vel->id = 0U;
 
 		zros_pub_update(&ctx->pub_optical_flow_vel);
 	}
