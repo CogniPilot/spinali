@@ -60,30 +60,27 @@ enum synapse_types_TimeStatus {
 enum synapse_topic_InertialFieldFlags {
 	SYNAPSE_TOPIC_INERTIAL_FIELD_FLAG_ACCEL = 1U << 0, /* Accelerometer fields were updated. */
 	SYNAPSE_TOPIC_INERTIAL_FIELD_FLAG_GYRO = 1U << 1, /* Gyroscope fields were updated. */
-	SYNAPSE_TOPIC_INERTIAL_FIELD_FLAG_MAG = 1U << 2, /* Magnetometer fields were updated. */
-	SYNAPSE_TOPIC_INERTIAL_FIELD_FLAG_PRESSURE = 1U << 3, /* Static pressure was updated. */
-	SYNAPSE_TOPIC_INERTIAL_FIELD_FLAG_TEMPERATURE = 1U << 4, /* Temperature was updated. */
+	SYNAPSE_TOPIC_INERTIAL_FIELD_FLAG_TEMPERATURE = 1U << 2, /* Temperature was updated. */
 };
 
 /*
- * Raw inertial and environmental sample from an IMU-class sensor.
+ * Raw accelerometer, gyroscope, and temperature sample from an IMU sensor.
  *
  * Values are sensor-native measurements in the body FLU mounting frame after
- * driver axis alignment; no estimator products belong here. All vectors share
- * that frame, timestamp_ns shares one clock domain selected by time_status,
+ * driver axis alignment; no estimator products belong here. The magnetometer
+ * and barometer are separate sensors carried on their own topics (MagneticField
+ * and AirData). timestamp_ns shares one clock domain selected by time_status,
  * and sensors updating at different rates set the matching flags bits.
  */
 struct synapse_topic_InertialSampleData {
 	uint64_t timestamp_ns;
 	synapse_types_Vec3f_t accel_flu_m_s2;
 	synapse_types_Vec3f_t gyro_flu_rad_s;
-	synapse_types_Vec3f_t mag_flu_tesla;
-	float absolute_pressure_hpa;
 	float temperature_c;
 	uint8_t flags; /* enum synapse_topic_InertialFieldFlags */
 	uint8_t time_status; /* enum synapse_types_TimeStatus */
 	uint8_t id;
-	/* One trailing pad byte to 56; supplied by the struct's 8-byte alignment. */
+	/* One trailing pad byte to 40; supplied by the struct's 8-byte alignment. */
 };
 typedef struct synapse_topic_InertialSampleData synapse_topic_InertialSample_t;
 
@@ -95,23 +92,21 @@ typedef struct synapse_topic_InertialSampleData synapse_topic_InertialSample_t;
 #define SYNAPSE_TOPIC_IMU_KEY "imu"
 #define SYNAPSE_TOPIC_IMU_CONTRACT                                                                 \
 	"application/x-synapse-struct;type=synapse.topic.InertialSampleData;"                      \
-	"schema=sha256-128:8d1353f47696862d8971594acbf77a56"
+	"schema=sha256-128:d84f22749fb0af66d6869d93ca460465"
 
 /* Layout assertions, one per field, against the synapse_fbs schema. */
 BUILD_ASSERT(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
 
 BUILD_ASSERT(sizeof(synapse_types_Vec3f_t) == 12U);
 
-BUILD_ASSERT(sizeof(synapse_topic_InertialSample_t) == 56U);
+BUILD_ASSERT(sizeof(synapse_topic_InertialSample_t) == 40U);
 BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, timestamp_ns) == 0U);
 BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, accel_flu_m_s2) == 8U);
 BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, gyro_flu_rad_s) == 20U);
-BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, mag_flu_tesla) == 32U);
-BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, absolute_pressure_hpa) == 44U);
-BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, temperature_c) == 48U);
-BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, flags) == 52U);
-BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, time_status) == 53U);
-BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, id) == 54U);
+BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, temperature_c) == 32U);
+BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, flags) == 36U);
+BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, time_status) == 37U);
+BUILD_ASSERT(offsetof(synapse_topic_InertialSample_t, id) == 38U);
 
 #endif /* SYNAPSE_IMU_TOPIC_H */
 

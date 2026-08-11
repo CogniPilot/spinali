@@ -29,6 +29,7 @@
 
 #include "synapse_gnss_topic.h"
 #include "synapse_imu_topic.h"
+#include "synapse_mag_topic.h"
 
 #if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) || defined(CONFIG_SPINALI_SYNAPSE_ZENOH)
 #include "synapse_optical_flow_topic.h"
@@ -68,6 +69,8 @@ ZROS_TOPIC_DECLARE(force_sp, synapse_pb_Vector3);
 ZROS_TOPIC_DECLARE(imu0, synapse_topic_InertialSample_t);
 ZROS_TOPIC_DECLARE(imu1, synapse_topic_InertialSample_t);
 ZROS_TOPIC_DECLARE(imu2, synapse_topic_InertialSample_t);
+ZROS_TOPIC_DECLARE(mag0, synapse_topic_MagneticField_t);
+ZROS_TOPIC_DECLARE(mag1, synapse_topic_MagneticField_t);
 ZROS_TOPIC_DECLARE(imu_q31_array, synapse_pb_ImuQ31Array);
 ZROS_TOPIC_DECLARE(input, synapse_pb_Input);
 ZROS_TOPIC_DECLARE(input_sbus, synapse_pb_Input);
@@ -96,6 +99,7 @@ ZROS_TOPIC_DECLARE(wheel_odometry, synapse_pb_WheelOdometry);
  * alias
  ********************************************************************/
 #define topic_imu topic_imu0
+#define topic_mag topic_mag0
 
 #endif // SYNAPSE_TOPIC_LIST_H_
 // vi: ts=4 sw=4 et
