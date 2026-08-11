@@ -59,6 +59,7 @@ struct context {
 	synapse_topic_OpticalFlowVelocityData_t flow_vel;
 	synapse_topic_GnssFix_t gnss;
 	synapse_topic_InertialSample_t imu;
+	synapse_topic_MagneticField_t mag;
 #if SYNAPSE_ZENOH_RTCM3_INBOUND
 	/* inbound RTCM3 correction bytes, republished on topic_rtcm3 */
 	synapse_pb_Rtcm3 rtcm3;
@@ -82,6 +83,7 @@ static struct context g_ctx = {
 	.flow_vel = {},
 	.gnss = {},
 	.imu = {},
+	.mag = {},
 #if SYNAPSE_ZENOH_RTCM3_INBOUND
 	.rtcm3 = {},
 #endif
@@ -134,6 +136,13 @@ static const struct topic_binding topic_table[] = {
 		.size = sizeof(g_ctx.imu),
 		.key = SYNAPSE_TOPIC_IMU_KEY,
 		.contract = SYNAPSE_TOPIC_IMU_CONTRACT,
+	},
+	{
+		.topic = &topic_mag,
+		.buffer = &g_ctx.mag,
+		.size = sizeof(g_ctx.mag),
+		.key = SYNAPSE_TOPIC_MAG_KEY,
+		.contract = SYNAPSE_TOPIC_MAG_CONTRACT,
 	},
 };
 

@@ -112,7 +112,7 @@ typedef struct synapse_topic_GnssFixData synapse_topic_GnssFix_t;
 #define SYNAPSE_TOPIC_GNSS_KEY "gnss"
 #define SYNAPSE_TOPIC_GNSS_CONTRACT                                                                \
 	"application/x-synapse-struct;type=synapse.topic.GnssFixData;"                             \
-	"schema=sha256-128:8add4005f50aaa07c9bbc502a2bd9b51"
+	"schema=sha256-128:d84f22749fb0af66d6869d93ca460465"
 
 /* Layout assertions, one per field, against the synapse_fbs schema. */
 BUILD_ASSERT(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
