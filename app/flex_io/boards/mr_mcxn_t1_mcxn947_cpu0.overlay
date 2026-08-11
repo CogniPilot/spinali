@@ -4,19 +4,9 @@
 / {
 	aliases {
 		imu-stream-0 = &icm45686_0;
-		mag-stream-0 = &bmm350_0;
 		pwm-0 = &flexpwm0_pwm0;
 		pwm-1 = &flexpwm1_pwm0;
 	};
-};
-
-/* USB Shell IRQ priority lower than SPI IRQs */
-&zephyr_udc0 {
-	interrupts = <0x43 0x6>;
-};
-
-&bmm350_0 {
-	odr = "100";
 };
 
 #include <zephyr/dt-bindings/sensor/icm45686.h>

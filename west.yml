@@ -37,7 +37,7 @@ manifest:
           - zcbor
     - name: zros
       remote: cognipilot
-      revision: 40ae3d68b0b9cf3f4ca4f5479cf9643c5b05a66b # fix/module-yml-v4.4 (local, push before sharing)
+      revision: 3f80b3ba8803abc02ad7382cc027658b05c07ca6 # main
       path: modules/lib/zros
     - name: cyecca
       remote: cognipilot
@@ -49,11 +49,11 @@ manifest:
       path: modules/lib/synapse_pb
     - name: zros_drivers
       remote: cognipilot
-      revision: e3e122fab969acd447ad104ddd58972977497f3f # feature/synapse-fbs-0.9.0-mag (MagneticField mag driver)
+      revision: caf3f6d80480497c9b3d14585814acc157ce9771 # main (MagneticField mag driver)
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
-      revision: 7fea234ee9890e0b980d4fca9c595615994d5d28 # feature/v4.4-mr-mcxn-t1
+      revision: 614eed3b6432e776f107e948ccb59fda76e034c5 # main
       path: modules/lib/zephyr_boards
     - name: hcdf_models
       remote: cognipilot
@@ -61,7 +61,7 @@ manifest:
       path: modules/lib/hcdf_models
     - name: synapse_msgs_fbs
       url: https://github.com/CogniPilot/synapse_msgs_fbs.git
-      revision: 9ff3fa17530de20b6d008e1afdc3f4bcc33c0ba4 # local optical-flow schema (push before sharing; remote cerebri2 was force-pushed)
+      revision: 9ff3fa17530de20b6d008e1afdc3f4bcc33c0ba4 # optical-flow schema
       path: modules/lib/synapse_msgs_fbs
     - name: zenoh-pico
       url: https://github.com/CogniPilot/zenoh-pico.git
