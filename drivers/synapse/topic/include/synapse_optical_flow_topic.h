@@ -144,12 +144,12 @@ typedef struct synapse_topic_OpticalFlowVelocityData synapse_topic_OpticalFlowVe
 #define SYNAPSE_TOPIC_OPTICAL_FLOW_KEY "flow"
 #define SYNAPSE_TOPIC_OPTICAL_FLOW_CONTRACT                                                        \
 	"application/x-synapse-struct;type=synapse.topic.OpticalFlowData;"                         \
-	"schema=sha256-128:9d4077b392c1e5de954843933aa812b3"
+	"schema=sha256-128:07a86a07289f29b93e0455fd4c3d25eb"
 
 #define SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_KEY "flow_vel"
 #define SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_CONTRACT                                               \
 	"application/x-synapse-struct;type=synapse.topic.OpticalFlowVelocityData;"                 \
-	"schema=sha256-128:031ec34678c4f89aa98d1127f0b72c05"
+	"schema=sha256-128:07a86a07289f29b93e0455fd4c3d25eb"
 
 /* Layout assertions, one per field, against the synapse_fbs schema. */
 BUILD_ASSERT(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);

@@ -264,16 +264,24 @@ static int zenoh_publishers_init(struct context *ctx)
 	return 0;
 }
 
-static void publish_struct(const z_loaned_publisher_t *pub, const void *data, size_t size)
+static void publish_struct(const z_loaned_publisher_t *pub, const void *data, size_t size,
+			   const char *contract)
 {
 	z_owned_bytes_t payload;
+	z_owned_encoding_t encoding;
+	z_publisher_put_options_t options;
 
 	if (z_bytes_copy_from_buf(&payload, data, size) < 0) {
 		return;
 	}
 
-	/* Encoding comes from the publisher declaration. */
-	z_publisher_put(pub, z_move(payload), NULL);
+	/* Stamp the value contract on every sample. zenoh-pico does not carry the
+	 * publisher-declared encoding onto puts, so a receiver keys off this one. */
+	z_publisher_put_options_default(&options);
+	if (z_encoding_from_str(&encoding, contract) == 0) {
+		options.encoding = z_move(encoding);
+	}
+	z_publisher_put(pub, z_move(payload), &options);
 }
 
 #if SYNAPSE_ZENOH_RTCM3_INBOUND
@@ -431,7 +439,7 @@ static void zenoh_run(void *p0, void *p1, void *p2)
 		for (size_t i = 0; i < ARRAY_SIZE(topic_table); i++) {
 			if (zros_sub_update(&subs[i]) == 0) {
 				publish_struct(z_loan(publishers[i]), topic_table[i].buffer,
-					       topic_table[i].size);
+					       topic_table[i].size, topic_table[i].contract);
 			}
 		}
 
