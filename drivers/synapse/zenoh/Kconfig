@@ -31,7 +31,7 @@ endchoice
 
 config ZENOH_LOCATOR
 	string "Zenoh endpoint locator"
-	default "tcp/192.0.2.2:7447" if SPINALI_SYNAPSE_ZENOH_MODE_CLIENT
+	default "tcp/10.58.0.1:7447" if SPINALI_SYNAPSE_ZENOH_MODE_CLIENT
 	default "udp/224.0.0.224:7446" if SPINALI_SYNAPSE_ZENOH_MODE_PEER
 	help
 	  In client mode, the zenoh router address to connect to. In peer mode,
