@@ -49,7 +49,7 @@ manifest:
       path: modules/lib/synapse_pb
     - name: zros_drivers
       remote: cognipilot
-      revision: caf3f6d80480497c9b3d14585814acc157ce9771 # main (MagneticField mag driver)
+      revision: a9c295c7321d7592fbb7aedab9fc12dfcbba8a27 # feature/synapse-pb-purge (pb-free streamed sensors + float IMU)
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
