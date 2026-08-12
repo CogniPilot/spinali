@@ -115,6 +115,14 @@
 	status = "okay";
 };
 
+/* ENET QoS PTP hardware clock (PHC): disabled by default in the SoC dtsi.
+ * Enabled here so the gPTP time-receiver stack has a clock to discipline,
+ * putting this node's timestamps on the shared network timescale.
+ */
+&enet_ptp_clock {
+	status = "okay";
+};
+
 /* Pinctrl definitions */
 &pinctrl {
 	/* FC3 I2C (P1_0 SDA, P1_1 SCL) */
