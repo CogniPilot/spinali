@@ -2,10 +2,9 @@
  * Copyright (c) 2026 CogniPilot Foundation
  * SPDX-License-Identifier: Apache-2.0
  *
- * Shared resolver for the synapse.types.TimeStatus wire field: reads the gPTP
- * slave PHC and reports whether a producer's published timestamps are on the
- * shared grandmaster timescale, plus the boot-to-PHC offset that carries them
- * there.
+ * Shared resolver for the synapse.types.TimeStatus wire field: reports whether
+ * a producer's published timestamps are on the shared gPTP grandmaster
+ * timescale, and the boot-to-PHC offset that carries them there.
  */
 #ifndef SYNAPSE_TIME_STATUS_H
 #define SYNAPSE_TIME_STATUS_H
@@ -25,15 +24,16 @@
  * Resolve this node's clock discipline state and, when it is on the shared
  * timescale, the offset that carries a boot-clock timestamp onto it.
  *
- * The node runs the gPTP slave stack (CONFIG_NET_GPTP without GM_CAPABLE), so
- * its Ethernet MAC PTP hardware clock (PHC) is steered to follow the
- * grandmaster the coe node serves over the T1 link. gptp_event_capture reads
- * that slave PHC and reports whether a grandmaster is currently present.
+ * gptp_event_capture reads the gPTP-disciplined PHC: the slave clock on a
+ * follower node, or the node's own served clock on the grandmaster (only while
+ * that served clock is disciplined, so a not-yet-locked grandmaster still reads
+ * as node-local time). It also reports whether a grandmaster is present in the
+ * domain.
  *
  * Sensor sample stamps are taken from the free-running kernel boot clock, a
  * different clock from the PHC, so a boot-clock timestamp is placed on the
- * shared timescale by adding the offset between the two clocks read at the
- * same instant: offset = phc_now - boot_now. Every timestamp in one published
+ * shared timescale by adding the offset between the two clocks read at the same
+ * instant: offset = phc_now - boot_now. Every timestamp in one published
  * message is shifted by that one offset, so the relative structure of the
  * stamps is preserved while their absolute reference moves onto the
  * GNSS-traceable domain.
@@ -56,7 +56,10 @@ static inline uint8_t synapse_time_status_resolve(bool *time_ever_synced, int64_
 	struct net_ptp_time phc;
 	bool gm_present = false;
 
-	/* no slave PHC available yet (gPTP not up): stay on node-local time */
+	/* nonzero: no disciplined PHC to read. Either gPTP is not up yet, or
+	 * this node is an as-yet-undisciplined grandmaster: node-local time is
+	 * all there is to publish.
+	 */
 	if (gptp_event_capture(&phc, &gm_present) != 0) {
 		return SYNAPSE_TYPES_TIME_STATUS_LOCAL_FREERUN;
 	}
@@ -85,3 +88,5 @@ static inline uint8_t synapse_time_status_resolve(bool *time_ever_synced, int64_
 }
 
 #endif /* SYNAPSE_TIME_STATUS_H */
+
+/* vi: ts=4 sw=4 et */

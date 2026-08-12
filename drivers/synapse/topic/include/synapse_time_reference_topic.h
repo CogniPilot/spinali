@@ -74,7 +74,7 @@ typedef struct synapse_topic_TimeReferenceData synapse_topic_TimeReferenceData_t
 #define SYNAPSE_TOPIC_TIME_REFERENCE_KEY "time"
 #define SYNAPSE_TOPIC_TIME_REFERENCE_CONTRACT                                                      \
 	"application/x-synapse-struct;type=synapse.topic.TimeReferenceData;"                       \
-	"schema=sha256-128:b4ed060b11764eccdb3d7784384ec1d2"
+	"schema=sha256-128:bd7f023974e11a006108db90353cc877"
 
 /* Layout assertions, one per field, against the synapse_fbs schema. */
 BUILD_ASSERT(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);
