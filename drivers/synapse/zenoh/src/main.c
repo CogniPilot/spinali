@@ -50,6 +50,19 @@ LOG_MODULE_REGISTER(synapse_zenoh, CONFIG_SPINALI_SYNAPSE_ZENOH_LOG_LEVEL);
 #define SYNAPSE_ZENOH_RTCM3_INBOUND 0
 #endif
 
+/*
+ * Opt-in AFBR per-pixel point cloud. The gate mirrors the topic-registry row
+ * exactly: the opt-in Kconfig and the argus stream hardware must both be
+ * present, so the 328-byte sample buffer below costs nothing on the default
+ * build.
+ */
+#if defined(CONFIG_SPINALI_SYNAPSE_ZENOH_ARGUS_POINTCLOUD) &&                                      \
+	DT_NODE_EXISTS(DT_ALIAS(argus_stream_0))
+#define SYNAPSE_ZENOH_ARGUS_POINTCLOUD 1
+#else
+#define SYNAPSE_ZENOH_ARGUS_POINTCLOUD 0
+#endif
+
 static K_THREAD_STACK_DEFINE(g_my_stack_area, MY_STACK_SIZE);
 
 struct context {
@@ -60,6 +73,10 @@ struct context {
 	synapse_topic_GnssFix_t gnss;
 	synapse_topic_InertialSample_t imu;
 	synapse_topic_MagneticField_t mag;
+	synapse_topic_TimeReferenceData_t time_ref;
+#if SYNAPSE_ZENOH_ARGUS_POINTCLOUD
+	synapse_topic_ArgusPointCloudData_t argus_pc;
+#endif
 #if SYNAPSE_ZENOH_RTCM3_INBOUND
 	/* inbound RTCM3 correction bytes, republished on topic_rtcm3 */
 	synapse_topic_Rtcm3_t rtcm3;
@@ -84,6 +101,10 @@ static struct context g_ctx = {
 	.gnss = {},
 	.imu = {},
 	.mag = {},
+	.time_ref = {},
+#if SYNAPSE_ZENOH_ARGUS_POINTCLOUD
+	.argus_pc = {},
+#endif
 #if SYNAPSE_ZENOH_RTCM3_INBOUND
 	.rtcm3 = {},
 #endif
@@ -148,6 +169,22 @@ static const struct topic_binding topic_table[] = {
 			    .size = sizeof(g_ctx.mag),
 			    .key = SYNAPSE_TOPIC_MAG_KEY,
 			    .contract = SYNAPSE_TOPIC_MAG_CONTRACT,
+		    },))
+	IF_ENABLED(CONFIG_NET_GPTP,
+		   ({
+			    .topic = &topic_time_reference,
+			    .buffer = &g_ctx.time_ref,
+			    .size = sizeof(g_ctx.time_ref),
+			    .key = SYNAPSE_TOPIC_TIME_REFERENCE_KEY,
+			    .contract = SYNAPSE_TOPIC_TIME_REFERENCE_CONTRACT,
+		    },))
+	IF_ENABLED(SYNAPSE_ZENOH_ARGUS_POINTCLOUD,
+		   ({
+			    .topic = &topic_argus_pointcloud,
+			    .buffer = &g_ctx.argus_pc,
+			    .size = sizeof(g_ctx.argus_pc),
+			    .key = SYNAPSE_TOPIC_ARGUS_POINTCLOUD_KEY,
+			    .contract = SYNAPSE_TOPIC_ARGUS_POINTCLOUD_CONTRACT,
 		    },))
 };
 

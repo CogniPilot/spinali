@@ -47,6 +47,19 @@ config SPINALI_SYNAPSE_ZENOH_NAMESPACE
 	  are allowed; do not use leading or trailing slashes. This must match
 	  the namespace the receiving vehicle is configured with.
 
+config SPINALI_SYNAPSE_ZENOH_ARGUS_POINTCLOUD
+	bool "Publish the argus per-pixel point cloud"
+	default n
+	depends on ZROS_SENSE_STREAM_ARGUS
+	help
+	  Publish the AFBR-S50 per-pixel range and intensity point cloud
+	  (catalog key "argus", 328-byte samples at the ranger frame rate) so
+	  an offboard consumer can reconstruct the 32-zone depth image. This
+	  stream is bandwidth and compute heavy for what is normally a
+	  diagnostic view, so leave it off unless something offboard actually
+	  consumes it; the fused scalar range already rides on the optical
+	  flow topics.
+
 module = SPINALI_SYNAPSE_ZENOH
 module-str = synapse_zenoh
 source "subsys/logging/Kconfig.template.log_config"

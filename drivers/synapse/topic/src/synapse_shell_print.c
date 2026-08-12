@@ -78,6 +78,34 @@ int snprint_argus(char *buf, size_t n, synapse_topic_ArgusResults_t *m)
 		(double)m->bin.amplitude, m->bin.signal_quality);
 }
 
+int snprint_argus_pointcloud(char *buf, size_t n, synapse_topic_ArgusPointCloudData_t *m)
+{
+	size_t offset = 0;
+	offset += snprintf_cat(buf + offset, n - offset, "stamp: %llu ns\n",
+			       (unsigned long long)m->timestamp_ns);
+	offset += snprintf_cat(buf + offset, n - offset,
+			       "stat: %d  qual: %d  integ: %u us  px mask: 0x%08x\n",
+			       m->device_status, m->signal_quality,
+			       (unsigned int)m->integration_time_us,
+			       (unsigned int)m->pixel_enabled_mask);
+	for (size_t row = 0; row < 4; row++) {
+		offset += snprintf_cat(buf + offset, n - offset,
+				       "range [m] %7.3f %7.3f %7.3f %7.3f %7.3f %7.3f %7.3f %7.3f\n",
+				       (double)m->range_m.px_m[8 * row + 0],
+				       (double)m->range_m.px_m[8 * row + 1],
+				       (double)m->range_m.px_m[8 * row + 2],
+				       (double)m->range_m.px_m[8 * row + 3],
+				       (double)m->range_m.px_m[8 * row + 4],
+				       (double)m->range_m.px_m[8 * row + 5],
+				       (double)m->range_m.px_m[8 * row + 6],
+				       (double)m->range_m.px_m[8 * row + 7]);
+	}
+	offset += snprintf_cat(buf + offset, n - offset, "ref: %7.3f m  %8.1f LSB  st: 0x%02x\n",
+			       (double)m->reference_range_m, (double)m->reference_amplitude_lsb,
+			       m->reference_status);
+	return offset;
+}
+
 int snprint_pixart_paa3905(char *buf, size_t n, synapse_topic_PixartPaa3905_t *m)
 {
 	return snprintf_cat(
@@ -120,6 +148,21 @@ int snprint_optical_flow_vel(char *buf, size_t n, synapse_topic_OpticalFlowVeloc
 			       "vel [m/s]  x: %10.4f y: %10.4f  dist: %8.3f m  quality: %d\n",
 			       (double)m->velocity_flu_m_s.x, (double)m->velocity_flu_m_s.y,
 			       (double)m->distance_m, m->quality);
+	return offset;
+}
+
+int snprint_time_reference(char *buf, size_t n, synapse_topic_TimeReferenceData_t *m)
+{
+	size_t offset = 0;
+	offset += snprintf_cat(buf + offset, n - offset, "stamp: %llu ns\n",
+			       (unsigned long long)m->timestamp_ns);
+	offset += snprintf_cat(buf + offset, n - offset, "tai: %llu ns  unix: %llu ns\n",
+			       (unsigned long long)m->time_tai_ns,
+			       (unsigned long long)m->time_unix_ns);
+	offset += snprintf_cat(buf + offset, n - offset,
+			       "status: %d  class: %d  utc offset: %d s  uncertainty: %u ns\n",
+			       m->time_status, m->clock_class, m->utc_offset_s,
+			       (unsigned int)m->uncertainty_ns);
 	return offset;
 }
 

@@ -10,6 +10,7 @@
 
 #include <zros/zros_topic.h>
 
+#include "synapse_argus_pointcloud_topic.h"
 #include "synapse_argus_topic.h"
 #include "synapse_gnss_topic.h"
 #include "synapse_imu_topic.h"
@@ -18,6 +19,7 @@
 #include "synapse_optical_flow_topic.h"
 #include "synapse_rtcm3_topic.h"
 #include "synapse_status_topic.h"
+#include "synapse_time_reference_topic.h"
 
 /*
  * The topic registry. One row per topic instance:
@@ -28,10 +30,13 @@
  * application actually carries. The streamed sensor topics gate on the very
  * devicetree alias their stream driver keys off, so the topic exists if and
  * only if the sensor does; a stale CONFIG_ZROS_SENSE_STREAM_* left on for
- * absent hardware cannot conjure a dead topic. The rest gate on the driver or
- * application that owns them. The mirror type headers above are always
- * included so the printers compile regardless of gating; the linker drops the
- * unused ones.
+ * absent hardware cannot conjure a dead topic. The time_reference topic gates
+ * on the gPTP stack itself: a node without it has no clock descriptor to
+ * publish. The rest gate on the driver or application that owns them. The
+ * argus point cloud additionally gates on its opt-in publish option, since
+ * the per-pixel wire samples are worth carrying only when something offboard
+ * asked for them. The mirror type headers above are always included so the
+ * printers compile regardless of gating; the linker drops the unused ones.
  */
 #define SYNAPSE_TOPIC_TABLE(X)                                                                      \
 	X(imu0, synapse_topic_InertialSample_t, snprint_imu,                                        \
@@ -47,6 +52,9 @@
 	X(nav_sat_fix, synapse_topic_GnssFix_t, snprint_gnss, CONFIG_ZROS_SENSE_GNSS)               \
 	X(argus, synapse_topic_ArgusResults_t, snprint_argus,                                       \
 	  DT_NODE_EXISTS(DT_ALIAS(argus_stream_0)))                                                 \
+	X(argus_pointcloud, synapse_topic_ArgusPointCloudData_t, snprint_argus_pointcloud,          \
+	  UTIL_AND(IS_ENABLED(CONFIG_SPINALI_SYNAPSE_ZENOH_ARGUS_POINTCLOUD),                      \
+		   DT_NODE_EXISTS(DT_ALIAS(argus_stream_0))))                                       \
 	X(optical_flow_raw, synapse_topic_PixartPaa3905_t, snprint_pixart_paa3905,                  \
 	  DT_NODE_EXISTS(DT_ALIAS(optical_flow_stream_0)))                                          \
 	X(status, synapse_topic_Status_t, snprint_status, CONFIG_ZROS_SENSE_STREAM_IMU)             \
@@ -54,7 +62,9 @@
 	X(optical_flow, synapse_topic_OpticalFlowData_t, snprint_optical_flow,                      \
 	  CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW)                                                       \
 	X(optical_flow_vel, synapse_topic_OpticalFlowVelocityData_t, snprint_optical_flow_vel,      \
-	  CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW)
+	  CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW)                                                      \
+	X(time_reference, synapse_topic_TimeReferenceData_t, snprint_time_reference,                \
+	  CONFIG_NET_GPTP)
 
 #define _SYNAPSE_TOPIC_DECLARE(name, type, printer, gate)                                          \
 	IF_ENABLED(gate, (ZROS_TOPIC_DECLARE(name, type);))
