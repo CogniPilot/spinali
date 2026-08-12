@@ -13,4 +13,4 @@ zephyr_library_sources(
   )
 
 
-add_dependencies(spinali_synapse_topic synapse_pb spinali_core_common)
+add_dependencies(spinali_synapse_topic spinali_core_common)

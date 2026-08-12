@@ -62,7 +62,7 @@ struct context {
 	synapse_topic_MagneticField_t mag;
 #if SYNAPSE_ZENOH_RTCM3_INBOUND
 	/* inbound RTCM3 correction bytes, republished on topic_rtcm3 */
-	synapse_pb_Rtcm3 rtcm3;
+	synapse_topic_Rtcm3_t rtcm3;
 #endif
 	/* zenoh */
 	z_owned_session_t session;
@@ -287,18 +287,18 @@ static void rtcm3_recv_handler(z_loaned_sample_t *sample, void *arg)
 	size_t len = z_bytes_len(payload);
 	z_bytes_reader_t reader;
 
-	if (len == 0 || len > sizeof(ctx->rtcm3.data.bytes)) {
+	if (len == 0 || len > sizeof(ctx->rtcm3.data)) {
 		LOG_WRN("dropping rtcm3 frame of %zu bytes", len);
 		return;
 	}
 
 	reader = z_bytes_get_reader(payload);
-	if (z_bytes_reader_read(&reader, ctx->rtcm3.data.bytes, len) != len) {
+	if (z_bytes_reader_read(&reader, ctx->rtcm3.data, len) != len) {
 		LOG_WRN("short read on rtcm3 frame");
 		return;
 	}
 
-	ctx->rtcm3.data.size = len;
+	ctx->rtcm3.len = (uint32_t)len;
 	zros_pub_update(&ctx->pub_rtcm3);
 }
 

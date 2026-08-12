@@ -67,9 +67,9 @@ struct context {
 	struct zros_sub sub_imu;
 	struct zros_sub sub_argus;
 	/* subscription data */
-	synapse_pb_PixartPAA3905 optical_flow_raw;
-	synapse_pb_Imu imu;
-	synapse_pb_ArgusResults argus;
+	synapse_topic_PixartPaa3905_t optical_flow_raw;
+	synapse_topic_InertialSample_t imu;
+	synapse_topic_ArgusResults_t argus;
 	/* publications */
 	struct zros_pub pub_optical_flow;
 	struct zros_pub pub_optical_flow_vel;
@@ -156,11 +156,6 @@ static struct context g_ctx = {
 	.thread_data = {},
 };
 
-static int64_t timestamp_from_pb(const synapse_pb_Timestamp *ts)
-{
-	return ts->seconds * 1000000LL + ts->nanos / 1000LL;
-}
-
 static void clear_accumulated_data(struct context *ctx)
 {
 	ctx->flow_rad[0] = 0.0f;
@@ -216,13 +211,13 @@ static void sensor_xy_to_flu(float sensor_x, float sensor_y, float *flu_x, float
  * absent or off-magnitude, once a trustworthy gravity vector has seeded it.
  * gyro_roll_rate and gyro_pitch_rate are the body FLU rates about +x and +y.
  */
-static void update_tilt_estimate(struct context *ctx, const synapse_pb_Imu *imu,
+static void update_tilt_estimate(struct context *ctx, const synapse_topic_InertialSample_t *imu,
 				 float gyro_roll_rate, float gyro_pitch_rate, float dt_s)
 {
 	float roll_pred = ctx->tilt_roll_rad + gyro_roll_rate * dt_s;
 	float pitch_pred = ctx->tilt_pitch_rad + gyro_pitch_rate * dt_s;
 
-	if (!imu->has_linear_acceleration) {
+	if (!(imu->flags & SYNAPSE_TOPIC_INERTIAL_FIELD_FLAG_ACCEL)) {
 		if (ctx->tilt_valid) {
 			ctx->tilt_roll_rad = roll_pred;
 			ctx->tilt_pitch_rad = pitch_pred;
@@ -230,13 +225,9 @@ static void update_tilt_estimate(struct context *ctx, const synapse_pb_Imu *imu,
 		return;
 	}
 
-	float a_flu_x;
-	float a_flu_y;
-
-	sensor_xy_to_flu((float)imu->linear_acceleration.x, (float)imu->linear_acceleration.y,
-			 &a_flu_x, &a_flu_y);
-
-	float a_flu_z = (float)imu->linear_acceleration.z;
+	float a_flu_x = imu->accel_flu_m_s2.x;
+	float a_flu_y = imu->accel_flu_m_s2.y;
+	float a_flu_z = imu->accel_flu_m_s2.z;
 	float a_mag = sqrtf(a_flu_x * a_flu_x + a_flu_y * a_flu_y + a_flu_z * a_flu_z);
 
 	bool acc_usable =
@@ -278,13 +269,13 @@ static void update_tilt_estimate(struct context *ctx, const synapse_pb_Imu *imu,
 
 static void update_gyro_buffer(struct context *ctx)
 {
-	const synapse_pb_Imu *imu = &ctx->imu;
+	const synapse_topic_InertialSample_t *imu = &ctx->imu;
 
-	if (!imu->has_stamp || !imu->has_angular_velocity) {
+	if (!(imu->flags & SYNAPSE_TOPIC_INERTIAL_FIELD_FLAG_GYRO)) {
 		return;
 	}
 
-	int64_t timestamp_us = timestamp_from_pb(&imu->stamp);
+	int64_t timestamp_us = (int64_t)(imu->timestamp_ns / 1000ULL);
 	float dt_s = (timestamp_us - ctx->gyro_timestamp_sample_last_us) * 1e-6f;
 
 	ctx->gyro_timestamp_sample_last_us = timestamp_us;
@@ -298,10 +289,9 @@ static void update_gyro_buffer(struct context *ctx)
 		.dt = dt_s,
 	};
 
-	/* the imu topic carries raw chip axes */
-	sensor_xy_to_flu((float)imu->angular_velocity.x, (float)imu->angular_velocity.y,
-			 &sample.data[0], &sample.data[1]);
-	sample.data[2] = (float)imu->angular_velocity.z;
+	sample.data[0] = imu->gyro_flu_rad_s.x;
+	sample.data[1] = imu->gyro_flu_rad_s.y;
+	sample.data[2] = imu->gyro_flu_rad_s.z;
 
 	gyro_ring_buffer_push(&ctx->gyro_buffer, &sample);
 
@@ -311,9 +301,9 @@ static void update_gyro_buffer(struct context *ctx)
 
 static void update_range_buffer(struct context *ctx)
 {
-	const synapse_pb_ArgusResults *argus = &ctx->argus;
+	const synapse_topic_ArgusResults_t *argus = &ctx->argus;
 
-	if (!argus->has_stamp || !argus->has_bin) {
+	if (!argus->has_bin) {
 		return;
 	}
 
@@ -328,7 +318,7 @@ static void update_range_buffer(struct context *ctx)
 		return;
 	}
 
-	int64_t timestamp_us = timestamp_from_pb(&argus->stamp);
+	int64_t timestamp_us = (int64_t)(argus->timestamp_ns / 1000ULL);
 
 	/*
 	 * Summarize the per-pixel footprint that produced this range. The AFBR
@@ -344,8 +334,7 @@ static void update_range_buffer(struct context *ctx)
 	float max_r = 0.0f;
 
 	for (size_t i = 0; i < argus->pixel_count && i < 32U; i++) {
-		if (argus->pixel[i].status !=
-		    synapse_pb_ArgusPixel_Pixel_Status_PIXEL_STATUS_OK) {
+		if (argus->pixel[i].status != SYNAPSE_TOPIC_ARGUS_PIXEL_STATUS_OK) {
 			continue;
 		}
 
@@ -458,11 +447,11 @@ static uint8_t quality_pct_to_u8(uint8_t pct)
 static uint8_t flow_light_mode_from_pb(uint8_t pb_mode)
 {
 	switch (pb_mode) {
-	case synapse_pb_PixartPAA3905_Mode_MODE_BRIGHT:
+	case SYNAPSE_TOPIC_PAA3905_MODE_BRIGHT:
 		return SYNAPSE_TOPIC_FLOW_LIGHT_MODE_BRIGHT;
-	case synapse_pb_PixartPAA3905_Mode_MODE_LOW_LIGHT:
+	case SYNAPSE_TOPIC_PAA3905_MODE_LOW_LIGHT:
 		return SYNAPSE_TOPIC_FLOW_LIGHT_MODE_LOW_LIGHT;
-	case synapse_pb_PixartPAA3905_Mode_MODE_SUPER_LOW_LIGHT:
+	case SYNAPSE_TOPIC_PAA3905_MODE_SUPER_LOW_LIGHT:
 		return SYNAPSE_TOPIC_FLOW_LIGHT_MODE_SUPER_LOW_LIGHT;
 	default:
 		return SYNAPSE_TOPIC_FLOW_LIGHT_MODE_UNKNOWN;
@@ -530,13 +519,9 @@ static uint8_t resolve_time_status(struct context *ctx, int64_t *offset_ns)
 
 static void process_optical_flow(struct context *ctx)
 {
-	const synapse_pb_PixartPAA3905 *flow = &ctx->optical_flow_raw;
+	const synapse_topic_PixartPaa3905_t *flow = &ctx->optical_flow_raw;
 
-	if (!flow->has_stamp) {
-		return;
-	}
-
-	int64_t timestamp_us = timestamp_from_pb(&flow->stamp);
+	int64_t timestamp_us = (int64_t)(flow->timestamp_ns / 1000ULL);
 
 	/*
 	 * The PAA3905 reports no exposure window, so the frame period stands in

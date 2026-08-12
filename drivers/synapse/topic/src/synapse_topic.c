@@ -8,7 +8,6 @@
 
 #include <math.h>
 #include <stdio.h>
-#include <synapse_pb/vector3.pb.h>
 #include <zros/private/zros_node_struct.h>
 #include <zros/private/zros_pub_struct.h>
 #include <zros/private/zros_sub_struct.h>
@@ -51,38 +50,13 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 			  .lock = Z_MUTEX_INITIALIZER(g_ctx.lock)};
 
 #define TOPIC_DICTIONARY()                                                                         \
-	(accel_sp, &topic_accel_sp, "accel_sp"), (accel_ff, &topic_accel_ff, "accel_ff"),          \
-		(actuators, &topic_actuators, "actuators"),                                        \
-		(altimeter, &topic_altimeter, "altimeter"),                                        \
-		(angular_velocity_ff, &topic_angular_velocity_ff, "angular_velocity_ff"),          \
-		(angular_velocity_sp, &topic_angular_velocity_sp, "angular_velocity_sp"),          \
-		(argus, &topic_argus, "argus"), (attitude_sp, &topic_attitude_sp, "attitude_sp"),  \
-		(battery_state, &topic_battery_state, "battery_state"),                            \
-		(bezier_trajectory, &topic_bezier_trajectory, "bezier_trajectory"),                \
-		(bezier_trajectory_ethernet, &topic_bezier_trajectory_ethernet,                    \
-		 "bezier_trajectory_ethernet"),                                                    \
-		(clock_offset_ethernet, &topic_clock_offset_ethernet, "clock_offset_ethernet"),    \
-		(cmd_vel, &topic_cmd_vel, "cmd_vel"),                                              \
-		(cmd_vel_ethernet, &topic_cmd_vel_ethernet, "cmd_vel_ethernet"),                   \
-		(force_sp, &topic_force_sp, "force_sp"), (imu, &topic_imu, "imu"),                 \
-		(imu0, &topic_imu0, "imu0"), (imu1, &topic_imu1, "imu1"),                          \
-		(imu2, &topic_imu2, "imu2"),                                                       \
-		(imu_q31_array, &topic_imu_q31_array, "imu_q31_array"),                            \
-		(input, &topic_input, "input"),                                                    \
-		(input_ethernet, &topic_input_ethernet, "input_ethernet"),                         \
-		(input_sbus, &topic_input_sbus, "input_sbus"),                                     \
-		(led_array, &topic_led_array, "led_array"),                                        \
-		(moment_ff, &topic_moment_ff, "moment_ff"),                                        \
-		(moment_sp, &topic_moment_sp, "moment_sp"),                                        \
-		(nav_sat_fix, &topic_nav_sat_fix, "nav_sat_fix"),                                  \
-		(odometry_estimator, &topic_odometry_estimator, "odometry_estimator"),             \
-		(odometry_ethernet, &topic_odometry_ethernet, "odometry_ethernet"),                \
-		(orientation_sp, &topic_orientation_sp, "orientation_sp"),                         \
-		(optical_flow_raw, &topic_optical_flow_raw, "optical_flow_raw"),                   \
-		(position_sp, &topic_position_sp, "position_sp"), (pwm, &topic_pwm, "pwm"),        \
-		(safety, &topic_safety, "safety"), (status, &topic_status, "status"),              \
-		(velocity_sp, &topic_velocity_sp, "velocity_sp"),                                  \
-		(wheel_odometry, &topic_wheel_odometry, "wheel_odometry")
+	(argus, &topic_argus, "argus"), (imu, &topic_imu, "imu"),                                  \
+		(imu0, &topic_imu0, "imu0"), (imu1, &topic_imu1, "imu1"),                           \
+		(imu2, &topic_imu2, "imu2"), (mag, &topic_mag, "mag"),                              \
+		(mag0, &topic_mag0, "mag0"), (mag1, &topic_mag1, "mag1"),                           \
+		(nav_sat_fix, &topic_nav_sat_fix, "nav_sat_fix"),                                   \
+		(optical_flow_raw, &topic_optical_flow_raw, "optical_flow_raw"),                    \
+		(status, &topic_status, "status")
 
 static void shell_callback(const struct shell *sh, uint8_t *data, size_t len, void *user_data)
 {
@@ -234,73 +208,24 @@ void topic_work_handler(struct k_work *work)
 	struct zros_topic *topic = ctx->topic;
 	msg_handler_t *handler = ctx->handler;
 
-	if (topic == &topic_actuators) {
-		synapse_pb_Actuators msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_actuators);
-	} else if (topic == &topic_imu_q31_array) {
-		synapse_pb_ImuQ31Array msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_imu_q31_array);
-	} else if (topic == &topic_altimeter) {
-		synapse_pb_Altimeter msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_altimeter);
-	} else if (topic == &topic_angular_velocity_sp || topic == &topic_accel_sp ||
-		   topic == &topic_moment_sp || topic == &topic_force_sp ||
-		   topic == &topic_velocity_sp || topic == &topic_position_sp ||
-		   topic == &topic_accel_ff || topic == &topic_moment_ff ||
-		   topic == &topic_angular_velocity_ff) {
-		synapse_pb_Vector3 msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_vector3);
-	} else if (topic == &topic_argus) {
-		synapse_pb_ArgusResults msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_argus);
-	} else if (topic == &topic_attitude_sp || topic == &topic_orientation_sp) {
-		synapse_pb_Quaternion msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_quaternion);
-	} else if (topic == &topic_battery_state) {
-		synapse_pb_BatteryState msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_battery_state);
-	} else if (topic == &topic_bezier_trajectory_ethernet ||
-		   topic == &topic_bezier_trajectory) {
-		synapse_pb_BezierTrajectory msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_bezier_trajectory);
-	} else if (topic == &topic_clock_offset_ethernet) {
-		synapse_pb_ClockOffset msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_clock_offset);
-	} else if (topic == &topic_cmd_vel || topic == &topic_cmd_vel_ethernet) {
-		synapse_pb_Twist msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_twist);
-	} else if (topic == &topic_status) {
-		synapse_pb_Status msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_status);
-	} else if (topic == &topic_imu || topic == &topic_imu0 || topic == &topic_imu1 ||
-		   topic == &topic_imu2) {
-		synapse_pb_Imu msg = {};
+	if (topic == &topic_imu0 || topic == &topic_imu1 || topic == &topic_imu2) {
+		synapse_topic_InertialSample_t msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_imu);
-	} else if (topic == &topic_input_ethernet || topic == &topic_input_sbus ||
-		   topic == &topic_input) {
-		synapse_pb_Input msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_input);
-	} else if (topic == &topic_led_array) {
-		synapse_pb_LEDArray msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_ledarray);
-	} else if (topic == &topic_pwm) {
-		synapse_pb_Pwm msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_pwm);
+	} else if (topic == &topic_mag0 || topic == &topic_mag1) {
+		synapse_topic_MagneticField_t msg = {};
+		handler(sh, topic, &msg, (snprint_t *)&snprint_mag);
 	} else if (topic == &topic_nav_sat_fix) {
-		synapse_pb_NavSatFix msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_navsatfix);
+		synapse_topic_GnssFix_t msg = {};
+		handler(sh, topic, &msg, (snprint_t *)&snprint_gnss);
+	} else if (topic == &topic_argus) {
+		synapse_topic_ArgusResults_t msg = {};
+		handler(sh, topic, &msg, (snprint_t *)&snprint_argus);
 	} else if (topic == &topic_optical_flow_raw) {
-		synapse_pb_PixartPAA3905 msg = {};
+		synapse_topic_PixartPaa3905_t msg = {};
 		handler(sh, topic, &msg, (snprint_t *)&snprint_pixart_paa3905);
-	} else if (topic == &topic_odometry_estimator || topic == &topic_odometry_ethernet) {
-		synapse_pb_Odometry msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_odometry);
-	} else if (topic == &topic_safety) {
-		synapse_pb_Safety msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_safety);
-	} else if (topic == &topic_wheel_odometry) {
-		synapse_pb_WheelOdometry msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_wheel_odometry);
+	} else if (topic == &topic_status) {
+		synapse_topic_Status_t msg = {};
+		handler(sh, topic, &msg, (snprint_t *)&snprint_status);
 	} else {
 		char name[20];
 		zros_topic_get_name(topic, name, sizeof(name));
