@@ -109,41 +109,46 @@ struct topic_binding {
 };
 
 static const struct topic_binding topic_table[] = {
-	{
-		.topic = &topic_optical_flow,
-		.buffer = &g_ctx.flow,
-		.size = sizeof(g_ctx.flow),
-		.key = SYNAPSE_TOPIC_OPTICAL_FLOW_KEY,
-		.contract = SYNAPSE_TOPIC_OPTICAL_FLOW_CONTRACT,
-	},
-	{
-		.topic = &topic_optical_flow_vel,
-		.buffer = &g_ctx.flow_vel,
-		.size = sizeof(g_ctx.flow_vel),
-		.key = SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_KEY,
-		.contract = SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_CONTRACT,
-	},
-	{
-		.topic = &topic_nav_sat_fix,
-		.buffer = &g_ctx.gnss,
-		.size = sizeof(g_ctx.gnss),
-		.key = SYNAPSE_TOPIC_GNSS_KEY,
-		.contract = SYNAPSE_TOPIC_GNSS_CONTRACT,
-	},
-	{
-		.topic = &topic_imu,
-		.buffer = &g_ctx.imu,
-		.size = sizeof(g_ctx.imu),
-		.key = SYNAPSE_TOPIC_IMU_KEY,
-		.contract = SYNAPSE_TOPIC_IMU_CONTRACT,
-	},
-	{
-		.topic = &topic_mag,
-		.buffer = &g_ctx.mag,
-		.size = sizeof(g_ctx.mag),
-		.key = SYNAPSE_TOPIC_MAG_KEY,
-		.contract = SYNAPSE_TOPIC_MAG_CONTRACT,
-	},
+	IF_ENABLED(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW,
+		   ({
+			    .topic = &topic_optical_flow,
+			    .buffer = &g_ctx.flow,
+			    .size = sizeof(g_ctx.flow),
+			    .key = SYNAPSE_TOPIC_OPTICAL_FLOW_KEY,
+			    .contract = SYNAPSE_TOPIC_OPTICAL_FLOW_CONTRACT,
+		    },))
+	IF_ENABLED(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW,
+		   ({
+			    .topic = &topic_optical_flow_vel,
+			    .buffer = &g_ctx.flow_vel,
+			    .size = sizeof(g_ctx.flow_vel),
+			    .key = SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_KEY,
+			    .contract = SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_CONTRACT,
+		    },))
+	IF_ENABLED(CONFIG_ZROS_SENSE_GNSS,
+		   ({
+			    .topic = &topic_nav_sat_fix,
+			    .buffer = &g_ctx.gnss,
+			    .size = sizeof(g_ctx.gnss),
+			    .key = SYNAPSE_TOPIC_GNSS_KEY,
+			    .contract = SYNAPSE_TOPIC_GNSS_CONTRACT,
+		    },))
+	IF_ENABLED(DT_NODE_EXISTS(DT_ALIAS(imu_stream_0)),
+		   ({
+			    .topic = &topic_imu,
+			    .buffer = &g_ctx.imu,
+			    .size = sizeof(g_ctx.imu),
+			    .key = SYNAPSE_TOPIC_IMU_KEY,
+			    .contract = SYNAPSE_TOPIC_IMU_CONTRACT,
+		    },))
+	IF_ENABLED(DT_NODE_EXISTS(DT_ALIAS(mag_stream_0)),
+		   ({
+			    .topic = &topic_mag,
+			    .buffer = &g_ctx.mag,
+			    .size = sizeof(g_ctx.mag),
+			    .key = SYNAPSE_TOPIC_MAG_KEY,
+			    .contract = SYNAPSE_TOPIC_MAG_CONTRACT,
+		    },))
 };
 
 /* Parallel per-row state, indexed the same way as topic_table. */

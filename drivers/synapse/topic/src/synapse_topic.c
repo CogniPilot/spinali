@@ -8,6 +8,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 #include <zros/private/zros_node_struct.h>
 #include <zros/private/zros_pub_struct.h>
 #include <zros/private/zros_sub_struct.h>
@@ -49,14 +50,41 @@ static context_t g_ctx = {.work_item = Z_WORK_INITIALIZER(topic_work_handler),
 			  .handler = NULL,
 			  .lock = Z_MUTEX_INITIALIZER(g_ctx.lock)};
 
-#define TOPIC_DICTIONARY()                                                                         \
-	(argus, &topic_argus, "argus"), (imu, &topic_imu, "imu"),                                  \
-		(imu0, &topic_imu0, "imu0"), (imu1, &topic_imu1, "imu1"),                           \
-		(imu2, &topic_imu2, "imu2"), (mag, &topic_mag, "mag"),                              \
-		(mag0, &topic_mag0, "mag0"), (mag1, &topic_mag1, "mag1"),                           \
-		(nav_sat_fix, &topic_nav_sat_fix, "nav_sat_fix"),                                   \
-		(optical_flow_raw, &topic_optical_flow_raw, "optical_flow_raw"),                    \
-		(status, &topic_status, "status")
+/*
+ * Registry of the topics compiled into this application, generated from the
+ * gated table. It resolves a shell-typed name to its topic and backs the
+ * dynamic tab-completion, so `zros topic echo` offers only the topics this node
+ * carries. The trailing sentinel keeps the array non-empty when a node
+ * registers no topics at all.
+ */
+struct topic_reg {
+	const char *name;
+	struct zros_topic *topic;
+};
+
+#define _SYNAPSE_TOPIC_REG(name, type, printer, gate)                                              \
+	IF_ENABLED(gate, ({STRINGIFY(name), &topic_##name},))
+static const struct topic_reg topic_registry[] = {
+	SYNAPSE_TOPIC_TABLE(_SYNAPSE_TOPIC_REG)
+#if DT_NODE_EXISTS(DT_ALIAS(imu_stream_0))
+	{"imu", &topic_imu},
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(mag_stream_0))
+	{"mag", &topic_mag},
+#endif
+	{NULL, NULL},
+};
+#undef _SYNAPSE_TOPIC_REG
+
+static struct zros_topic *topic_by_name(const char *name)
+{
+	for (size_t i = 0; topic_registry[i].name != NULL; i++) {
+		if (strcmp(topic_registry[i].name, name) == 0) {
+			return topic_registry[i].topic;
+		}
+	}
+	return NULL;
+}
 
 static void shell_callback(const struct shell *sh, uint8_t *data, size_t len, void *user_data)
 {
@@ -207,26 +235,28 @@ void topic_work_handler(struct k_work *work)
 	const struct shell *sh = ctx->sh;
 	struct zros_topic *topic = ctx->topic;
 	msg_handler_t *handler = ctx->handler;
+	bool handled = false;
 
-	if (topic == &topic_imu0 || topic == &topic_imu1 || topic == &topic_imu2) {
-		synapse_topic_InertialSample_t msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_imu);
-	} else if (topic == &topic_mag0 || topic == &topic_mag1) {
-		synapse_topic_MagneticField_t msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_mag);
-	} else if (topic == &topic_nav_sat_fix) {
-		synapse_topic_GnssFix_t msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_gnss);
-	} else if (topic == &topic_argus) {
-		synapse_topic_ArgusResults_t msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_argus);
-	} else if (topic == &topic_optical_flow_raw) {
-		synapse_topic_PixartPaa3905_t msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_pixart_paa3905);
-	} else if (topic == &topic_status) {
-		synapse_topic_Status_t msg = {};
-		handler(sh, topic, &msg, (snprint_t *)&snprint_status);
-	} else {
+	/* handler is consumed by the generated dispatch below; on a node that
+	 * carries no topics the dispatch is empty, so keep it referenced. */
+	(void)handler;
+
+	/*
+	 * Typed dispatch generated from the same gated table. Each compiled-in
+	 * topic gets a branch that stack-allocates its payload, so the echo
+	 * buffer is sized to the largest topic this application carries, not the
+	 * largest that could ever exist.
+	 */
+#define _SYNAPSE_TOPIC_DISPATCH(name, type, printer, gate)                                         \
+	IF_ENABLED(gate, (if (!handled && topic == &topic_##name) {                                \
+		type msg = {};                                                                     \
+		handler(sh, topic, &msg, (snprint_t *)&printer);                                   \
+		handled = true;                                                                    \
+	}))
+	SYNAPSE_TOPIC_TABLE(_SYNAPSE_TOPIC_DISPATCH)
+#undef _SYNAPSE_TOPIC_DISPATCH
+
+	if (!handled) {
 		char name[20];
 		zros_topic_get_name(topic, name, sizeof(name));
 		shell_print(sh, "%s not handled", name);
@@ -237,18 +267,26 @@ void topic_work_handler(struct k_work *work)
 	shell_print(sh, "");
 }
 
-static int cmd_zros_topic_hz(const struct shell *sh, size_t argc, char **argv, void *data)
+static int cmd_zros_topic_hz(const struct shell *sh, size_t argc, char **argv)
 {
-	struct zros_topic *topic = (struct zros_topic *)data;
+	struct zros_topic *topic = topic_by_name(argv[0]);
+	if (topic == NULL) {
+		shell_print(sh, "unknown topic");
+		return -EINVAL;
+	}
 	g_ctx.sh = sh;
 	g_ctx.handler = &topic_count_hz;
 	g_ctx.topic = topic;
 	return k_work_submit_to_queue(&g_topic_work_q, &g_ctx.work_item);
 }
 
-static int cmd_zros_topic_echo(const struct shell *sh, size_t argc, char **argv, void *data)
+static int cmd_zros_topic_echo(const struct shell *sh, size_t argc, char **argv)
 {
-	struct zros_topic *topic = (struct zros_topic *)data;
+	struct zros_topic *topic = topic_by_name(argv[0]);
+	if (topic == NULL) {
+		shell_print(sh, "unknown topic");
+		return -EINVAL;
+	}
 	g_ctx.sh = sh;
 	g_ctx.handler = &topic_echo;
 	g_ctx.topic = topic;
@@ -285,9 +323,13 @@ void sub_print_iterator(const struct zros_sub *sub, void *data)
 	shell_print(sh, "\t%s", name);
 }
 
-static int cmd_zros_topic_info(const struct shell *sh, size_t argc, char **argv, void *data)
+static int cmd_zros_topic_info(const struct shell *sh, size_t argc, char **argv)
 {
-	struct zros_topic *topic = (struct zros_topic *)data;
+	struct zros_topic *topic = topic_by_name(argv[0]);
+	if (topic == NULL) {
+		shell_print(sh, "unknown topic");
+		return -EINVAL;
+	}
 	shell_print(sh, "pubs");
 	zros_topic_iterate_pub(topic, pub_print_iterator, (void *)sh);
 	shell_print(sh, "subs");
@@ -309,10 +351,39 @@ static int cmd_zros_node_list(const struct shell *sh, size_t argc, char **argv)
 	return ZROS_OK;
 }
 
-// level 2 (topic echo/hz/list)
-SHELL_SUBCMD_DICT_SET_CREATE(sub_zros_topic_echo, cmd_zros_topic_echo, TOPIC_DICTIONARY());
-SHELL_SUBCMD_DICT_SET_CREATE(sub_zros_topic_hz, cmd_zros_topic_hz, TOPIC_DICTIONARY());
-SHELL_SUBCMD_DICT_SET_CREATE(sub_zros_topic_info, cmd_zros_topic_info, TOPIC_DICTIONARY());
+/*
+ * Dynamic tab-completion over the compiled-in topics. The get callbacks run
+ * only while the interactive shell is parsing or completing a command, never
+ * on any data path.
+ */
+static void topic_echo_get(size_t idx, struct shell_static_entry *entry)
+{
+	entry->syntax = topic_registry[idx].name;
+	entry->handler = cmd_zros_topic_echo;
+	entry->help = NULL;
+	entry->subcmd = NULL;
+}
+
+static void topic_hz_get(size_t idx, struct shell_static_entry *entry)
+{
+	entry->syntax = topic_registry[idx].name;
+	entry->handler = cmd_zros_topic_hz;
+	entry->help = NULL;
+	entry->subcmd = NULL;
+}
+
+static void topic_info_get(size_t idx, struct shell_static_entry *entry)
+{
+	entry->syntax = topic_registry[idx].name;
+	entry->handler = cmd_zros_topic_info;
+	entry->help = NULL;
+	entry->subcmd = NULL;
+}
+
+// level 2 (topic echo/hz/info)
+SHELL_DYNAMIC_CMD_CREATE(sub_zros_topic_echo, topic_echo_get);
+SHELL_DYNAMIC_CMD_CREATE(sub_zros_topic_hz, topic_hz_get);
+SHELL_DYNAMIC_CMD_CREATE(sub_zros_topic_info, topic_info_get);
 
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_zros_topic,
 			       SHELL_CMD(echo, &sub_zros_topic_echo, "Echo topic.", NULL),

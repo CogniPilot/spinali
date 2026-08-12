@@ -18,6 +18,9 @@ int snprint_imu(char *buf, size_t n, synapse_topic_InertialSample_t *m);
 int snprint_mag(char *buf, size_t n, synapse_topic_MagneticField_t *m);
 int snprint_pixart_paa3905(char *buf, size_t n, synapse_topic_PixartPaa3905_t *m);
 int snprint_status(char *buf, size_t n, synapse_topic_Status_t *m);
+int snprint_rtcm3(char *buf, size_t n, synapse_topic_Rtcm3_t *m);
+int snprint_optical_flow(char *buf, size_t n, synapse_topic_OpticalFlowData_t *m);
+int snprint_optical_flow_vel(char *buf, size_t n, synapse_topic_OpticalFlowVelocityData_t *m);
 
 #endif // SYNAPSE_SHELL_PRINT_H
 // vi: ts=4 sw=4 et

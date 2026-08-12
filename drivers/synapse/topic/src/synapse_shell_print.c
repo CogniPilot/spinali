@@ -93,4 +93,34 @@ int snprint_status(char *buf, size_t n, synapse_topic_Status_t *m)
 	return snprintf_cat(buf, n, "mode: %d\n", m->mode);
 }
 
+int snprint_rtcm3(char *buf, size_t n, synapse_topic_Rtcm3_t *m)
+{
+	return snprintf_cat(buf, n, "rtcm3 frame: %u bytes\n", m->len);
+}
+
+int snprint_optical_flow(char *buf, size_t n, synapse_topic_OpticalFlowData_t *m)
+{
+	size_t offset = 0;
+	offset += snprintf_cat(buf + offset, n - offset, "stamp: %llu ns\n",
+			       (unsigned long long)m->timestamp_ns);
+	offset += snprintf_cat(buf + offset, n - offset, "flow [rad]  x: %10.6f y: %10.6f\n",
+			       (double)m->flow_rad.x, (double)m->flow_rad.y);
+	offset += snprintf_cat(buf + offset, n - offset,
+			       "dist: %8.3f m  quality: %d  flags: 0x%02x\n", (double)m->distance_m,
+			       m->quality, m->flags);
+	return offset;
+}
+
+int snprint_optical_flow_vel(char *buf, size_t n, synapse_topic_OpticalFlowVelocityData_t *m)
+{
+	size_t offset = 0;
+	offset += snprintf_cat(buf + offset, n - offset, "stamp: %llu ns\n",
+			       (unsigned long long)m->timestamp_ns);
+	offset += snprintf_cat(buf + offset, n - offset,
+			       "vel [m/s]  x: %10.4f y: %10.4f  dist: %8.3f m  quality: %d\n",
+			       (double)m->velocity_flu_m_s.x, (double)m->velocity_flu_m_s.y,
+			       (double)m->distance_m, m->quality);
+	return offset;
+}
+
 // vi: ts=4 sw=4 et
