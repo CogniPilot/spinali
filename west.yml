@@ -22,7 +22,6 @@ manifest:
       revision: spinali-main-next
       import:
         - name-allowlist:
-          - nanopb
           - mbedtls
           - tf-psa-crypto
           - hal_nxp
@@ -43,10 +42,6 @@ manifest:
       remote: cognipilot
       revision: 64d1f0dc5127d85765909f0c3525cc38305dac19 # main 11/17/25
       path: modules/lib/cyecca
-    - name: synapse_pb
-      remote: cognipilot
-      revision: d14faa3fbce8ebe6412b252724ba3b47df1106c7 # main 12/16/25, adds Rtcm3
-      path: modules/lib/synapse_pb
     - name: zros_drivers
       remote: cognipilot
       revision: feature/synapse-pb-purge
@@ -59,10 +54,6 @@ manifest:
       remote: cognipilot
       revision: main
       path: modules/lib/hcdf_models
-    - name: synapse_msgs_fbs
-      url: https://github.com/CogniPilot/synapse_msgs_fbs.git
-      revision: 9ff3fa17530de20b6d008e1afdc3f4bcc33c0ba4 # optical-flow schema
-      path: modules/lib/synapse_msgs_fbs
     - name: zenoh-pico
       url: https://github.com/CogniPilot/zenoh-pico.git
       revision: f16312bcb357481c94ae1a336ecdd08687d11c87 # spinali-1.9

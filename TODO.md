@@ -55,7 +55,6 @@ we'd need to re-add it.
 
 - `zenoh-pico`: pinned to `main` (v1.8.0), `config.h` locally patched with `#ifndef` guards
 - `zephyr`: `spinali-optical-flow-v2` branch on CogniPilot/zephyr (cherry-picks: ethernet null-check, ICM45686 unaligned fix, LPSPI null deref fix, PAA3905 led-force-on)
-- `synapse_msgs_fbs`: `cerebri2` branch with `synapse_optical_flow.fbs` added
 - `zros_drivers`: stock `main`, no changes
 
 ## Desktop Side
