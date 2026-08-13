@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: cb86e25cfbd57d3b8d15fceaa94cba088cff3c0c # spinali-main
+      revision: spinali-main-next
       import:
         - name-allowlist:
           - nanopb
@@ -49,7 +49,7 @@ manifest:
       path: modules/lib/synapse_pb
     - name: zros_drivers
       remote: cognipilot
-      revision: a9c295c7321d7592fbb7aedab9fc12dfcbba8a27 # feature/synapse-pb-purge (pb-free streamed sensors + float IMU)
+      revision: feature/synapse-pb-purge
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
