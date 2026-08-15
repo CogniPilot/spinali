@@ -1,0 +1,66 @@
+# Copyright CogniPilot Foundation 2025
+# SPDX-License-Identifier: Apache-2.0
+
+config SPINALI_SYNAPSE_CSYN
+	bool "csyn synapse transport bridge"
+	default n
+	depends on ZROS
+	depends on CSYN
+	help
+	  Bridge the synapse zros topics to the csyn topic store. Outbound
+	  fixed-layout topics (GNSS, gPTP time, and the magnetometer) are
+	  subscribed on zros and copied into the csyn store, where the csyn zenoh
+	  transport publishes them tagged with the value contract from the pinned
+	  synapse_fbs catalog. Inbound RTCM3 corrections are forwarded from the
+	  csyn store to the zros rtcm3 topic.
+
+	  This is the csyn-based successor to SPINALI_SYNAPSE_ZENOH: enable one
+	  or the other, not both. Leave CSYN_ZROS_BRIDGE off so this bridge is
+	  the only path between zros and the csyn store.
+
+if SPINALI_SYNAPSE_CSYN
+
+# Per-topic mesh publish rate caps. Each topic is published only when its source
+# exists and its rate here is above zero, so setting a rate to 0 turns that topic
+# off. Every topic shares one best-effort multicast TX path, so raise a rate only
+# as far as a consumer actually needs.
+
+config SPINALI_SYNAPSE_CSYN_GNSS_RATE_HZ
+	int "GNSS fix mesh publish rate (Hz, 0 = off)"
+	default 25
+	help
+	  Upper rate at which the GNSS fix is republished onto the mesh, or 0 to
+	  not publish it. The u-blox F9P produces fixes up to 20 Hz, so 25 leaves
+	  headroom without dropping fixes.
+
+config SPINALI_SYNAPSE_CSYN_MAG_RATE_HZ
+	int "Magnetometer mesh publish rate (Hz, 0 = off)"
+	default 25
+	help
+	  Upper rate at which the magnetometer sample is republished onto the
+	  mesh, or 0 to not publish it. The RM3100 samples faster than an attitude
+	  estimator needs, so it is downsampled here.
+
+config SPINALI_SYNAPSE_CSYN_TIME_RATE_HZ
+	int "Time reference mesh publish rate (Hz, 0 = off)"
+	default 5
+	help
+	  Upper rate at which the gPTP time reference is republished onto the
+	  mesh, or 0 to not publish it. It changes about once a second.
+
+config SPINALI_SYNAPSE_CSYN_IMU_RATE_HZ
+	int "Raw inertial mesh publish rate (Hz, 0 = off)"
+	default 0
+	help
+	  Upper rate at which raw single inertial samples are published onto the
+	  mesh, or 0 (the default) to not publish them. Raw inertial is off by
+	  default because at the sensor ODR it is one packet per sample, which
+	  saturates the shared best-effort multicast TX path and starves the
+	  transport control plane. Prefer the batched InertialBatch path for high
+	  rate inertial.
+
+module = SPINALI_SYNAPSE_CSYN
+module-str = synapse_csyn
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SPINALI_SYNAPSE_CSYN

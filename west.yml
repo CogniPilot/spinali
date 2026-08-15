@@ -56,5 +56,9 @@ manifest:
       path: modules/lib/hcdf_models
     - name: zenoh-pico
       url: https://github.com/CogniPilot/zenoh-pico.git
-      revision: f16312bcb357481c94ae1a336ecdd08687d11c87 # spinali-1.9
+      revision: d1880874de7a792f41f30f563ddc3ec4956fe3ea # spinali-1.9 + Zephyr UDP-multicast join + IPv6-only fixes
       path: modules/lib/zenoh-pico
+    - name: csyn
+      remote: cognipilot
+      revision: 173d1989915ac67433153c305e07158cf8f50c49 # synapse_fbs 0.9.0 + configurable zenoh posture
+      path: modules/lib/csyn

@@ -7,5 +7,6 @@ rsource "topic/Kconfig"
 rsource "mcumgr_hooks/Kconfig"
 rsource "vehicle_optical_flow/Kconfig"
 rsource "zenoh/Kconfig"
+rsource "csyn/Kconfig"
 
 endmenu
