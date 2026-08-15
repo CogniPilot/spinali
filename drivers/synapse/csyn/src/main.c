@@ -57,12 +57,12 @@ LOG_MODULE_REGISTER(synapse_csyn, CONFIG_SPINALI_SYNAPSE_CSYN_LOG_LEVEL);
  * rate to 0 turns that topic off, so the mesh publish set is entirely conf
  * driven. Each expands to a literal 0/1 usable in the preprocessor and in C.
  */
-#if defined(CONFIG_ZROS_SENSE_GNSS) && (CONFIG_SPINALI_SYNAPSE_CSYN_GNSS_RATE_HZ > 0)
+#if defined(CONFIG_ZROS_SENSE_GNSS) && (CONFIG_SPINALI_SYNAPSE_CSYN_GNSS_RATE_HZ != 0)
 #define BRIDGE_TX_GNSS 1
 #else
 #define BRIDGE_TX_GNSS 0
 #endif
-#if defined(CONFIG_NET_GPTP) && (CONFIG_SPINALI_SYNAPSE_CSYN_TIME_RATE_HZ > 0)
+#if defined(CONFIG_NET_GPTP) && (CONFIG_SPINALI_SYNAPSE_CSYN_TIME_RATE_HZ != 0)
 #define BRIDGE_TX_TIME 1
 #else
 #define BRIDGE_TX_TIME 0
@@ -73,24 +73,32 @@ LOG_MODULE_REGISTER(synapse_csyn, CONFIG_SPINALI_SYNAPSE_CSYN_LOG_LEVEL);
  * best-effort multicast TX path and starves the transport control plane. Prefer
  * the batched InertialBatch path for high-rate inertial.
  */
-#if DT_NODE_EXISTS(DT_ALIAS(imu_stream_0)) && (CONFIG_SPINALI_SYNAPSE_CSYN_IMU_RATE_HZ > 0)
+#if DT_NODE_EXISTS(DT_ALIAS(imu_stream_0)) && (CONFIG_SPINALI_SYNAPSE_CSYN_IMU_RATE_HZ != 0)
 #define BRIDGE_TX_IMU 1
 #else
 #define BRIDGE_TX_IMU 0
 #endif
-#if DT_NODE_EXISTS(DT_ALIAS(mag_stream_0)) && (CONFIG_SPINALI_SYNAPSE_CSYN_MAG_RATE_HZ > 0)
+#if DT_NODE_EXISTS(DT_ALIAS(mag_stream_0)) && (CONFIG_SPINALI_SYNAPSE_CSYN_MAG_RATE_HZ != 0)
 #define BRIDGE_TX_MAG 1
 #else
 #define BRIDGE_TX_MAG 0
 #endif
+/*
+ * Optical flow is a motion-driven sensor whose ODR reaches the PAA3905 frame
+ * rate (126 Hz) and must never be capped below it: dropped frames lose the
+ * motion integration the estimator fuses. Its cadence is owned upstream by the
+ * vehicle_optical_flow driver (VOF_RATE); the bridge rate follows the shared
+ * convention (0 off, -1 unlimited, >0 Hz cap) and defaults to -1 so every
+ * sample the driver publishes reaches the mesh.
+ */
 #if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) &&                                                 \
-	(CONFIG_SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_RATE_HZ > 0)
+	(CONFIG_SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_RATE_HZ != 0)
 #define BRIDGE_TX_OPTICAL_FLOW 1
 #else
 #define BRIDGE_TX_OPTICAL_FLOW 0
 #endif
 #if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) &&                                                 \
-	(CONFIG_SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_VEL_RATE_HZ > 0)
+	(CONFIG_SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_VEL_RATE_HZ != 0)
 #define BRIDGE_TX_OPTICAL_FLOW_VEL 1
 #else
 #define BRIDGE_TX_OPTICAL_FLOW_VEL 0
@@ -184,7 +192,7 @@ struct tx_binding {
 	struct csyn_topic *ctopic;
 	void *buffer;
 	size_t size;
-	uint32_t rate_hz; /* per-topic mesh publish rate cap */
+	int32_t rate_hz; /* per-topic mesh publish rate: 0 off, -1 unlimited, >0 Hz cap */
 };
 
 #if BRIDGE_TX_COUNT > 0

@@ -26,7 +26,7 @@ if SPINALI_SYNAPSE_CSYN
 # as far as a consumer actually needs.
 
 config SPINALI_SYNAPSE_CSYN_GNSS_RATE_HZ
-	int "GNSS fix mesh publish rate (Hz, 0 = off)"
+	int "GNSS fix mesh publish rate (Hz, 0 = off, -1 = unlimited)"
 	default 25
 	help
 	  Upper rate at which the GNSS fix is republished onto the mesh, or 0 to
@@ -34,7 +34,7 @@ config SPINALI_SYNAPSE_CSYN_GNSS_RATE_HZ
 	  headroom without dropping fixes.
 
 config SPINALI_SYNAPSE_CSYN_MAG_RATE_HZ
-	int "Magnetometer mesh publish rate (Hz, 0 = off)"
+	int "Magnetometer mesh publish rate (Hz, 0 = off, -1 = unlimited)"
 	default 25
 	help
 	  Upper rate at which the magnetometer sample is republished onto the
@@ -42,14 +42,14 @@ config SPINALI_SYNAPSE_CSYN_MAG_RATE_HZ
 	  estimator needs, so it is downsampled here.
 
 config SPINALI_SYNAPSE_CSYN_TIME_RATE_HZ
-	int "Time reference mesh publish rate (Hz, 0 = off)"
+	int "Time reference mesh publish rate (Hz, 0 = off, -1 = unlimited)"
 	default 5
 	help
 	  Upper rate at which the gPTP time reference is republished onto the
 	  mesh, or 0 to not publish it. It changes about once a second.
 
 config SPINALI_SYNAPSE_CSYN_IMU_RATE_HZ
-	int "Raw inertial mesh publish rate (Hz, 0 = off)"
+	int "Raw inertial mesh publish rate (Hz, 0 = off, -1 = unlimited)"
 	default 0
 	help
 	  Upper rate at which raw single inertial samples are published onto the
@@ -60,22 +60,25 @@ config SPINALI_SYNAPSE_CSYN_IMU_RATE_HZ
 	  rate inertial.
 
 config SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_RATE_HZ
-	int "Optical flow mesh publish rate (Hz, 0 = off)"
-	default 25
+	int "Optical flow mesh publish rate (Hz, 0 = off, -1 = unlimited)"
+	default -1
 	help
-	  Upper rate at which the processed optical-flow sample (OpticalFlowData,
-	  body-FLU integrated flow with fused range) is republished onto the mesh,
-	  or 0 to not publish it. Carried only when SPINALI_VEHICLE_OPTICAL_FLOW is
-	  enabled, since that driver is the source topic.
+	  Mesh publish rate for the processed optical-flow sample (OpticalFlowData,
+	  body-FLU integrated flow with fused range). 0 turns it off, -1 (the
+	  default) is unlimited so the flow follows its motion-driven ODR up to the
+	  PAA3905 frame rate of 126 Hz and is never dropped, and a positive value
+	  caps it at that many Hz. The cadence is owned by the vehicle_optical_flow
+	  driver (VOF_RATE); cap here only to deliberately publish below that.
 
 config SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_VEL_RATE_HZ
-	int "Optical flow velocity mesh publish rate (Hz, 0 = off)"
-	default 25
+	int "Optical flow velocity mesh publish rate (Hz, 0 = off, -1 = unlimited)"
+	default -1
 	help
-	  Upper rate at which the tilt-compensated optical-flow velocity
-	  (OpticalFlowVelocityData) is republished onto the mesh, or 0 to not
-	  publish it. This is the convenience layer for a consumer without a full
-	  estimator; a consumer running an estimator prefers the OpticalFlow sample.
+	  Mesh publish rate for the tilt-compensated optical-flow velocity
+	  (OpticalFlowVelocityData). 0 off, -1 (the default) unlimited up to the
+	  126 Hz sensor ODR, positive caps at that many Hz. This is the convenience
+	  layer for a consumer without a full estimator; a consumer running an
+	  estimator prefers the OpticalFlow sample above.
 
 module = SPINALI_SYNAPSE_CSYN
 module-str = synapse_csyn
