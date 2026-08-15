@@ -83,7 +83,21 @@ LOG_MODULE_REGISTER(synapse_csyn, CONFIG_SPINALI_SYNAPSE_CSYN_LOG_LEVEL);
 #else
 #define BRIDGE_TX_MAG 0
 #endif
-#define BRIDGE_TX_COUNT (BRIDGE_TX_GNSS + BRIDGE_TX_TIME + BRIDGE_TX_IMU + BRIDGE_TX_MAG)
+#if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) &&                                                 \
+	(CONFIG_SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_RATE_HZ > 0)
+#define BRIDGE_TX_OPTICAL_FLOW 1
+#else
+#define BRIDGE_TX_OPTICAL_FLOW 0
+#endif
+#if defined(CONFIG_SPINALI_VEHICLE_OPTICAL_FLOW) &&                                                 \
+	(CONFIG_SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_VEL_RATE_HZ > 0)
+#define BRIDGE_TX_OPTICAL_FLOW_VEL 1
+#else
+#define BRIDGE_TX_OPTICAL_FLOW_VEL 0
+#endif
+#define BRIDGE_TX_COUNT                                                                            \
+	(BRIDGE_TX_GNSS + BRIDGE_TX_TIME + BRIDGE_TX_IMU + BRIDGE_TX_MAG +                          \
+	 BRIDGE_TX_OPTICAL_FLOW + BRIDGE_TX_OPTICAL_FLOW_VEL)
 
 #if defined(CONFIG_ZROS_SENSE_RTCM3_SUB)
 #define BRIDGE_RX_RTCM3 1
@@ -111,6 +125,14 @@ CSYN_TOPIC_DEFINE(csyn_mag, SYNAPSE_TOPIC_MAG_KEY, CSYN_DIR_TX,
 CSYN_TOPIC_DEFINE(csyn_time, SYNAPSE_TOPIC_TIME_REFERENCE_KEY, CSYN_DIR_TX,
 		  sizeof(synapse_topic_TimeReferenceData_t));
 #endif
+#if BRIDGE_TX_OPTICAL_FLOW
+CSYN_TOPIC_DEFINE(csyn_optical_flow, SYNAPSE_TOPIC_OPTICAL_FLOW_KEY, CSYN_DIR_TX,
+		  sizeof(synapse_topic_OpticalFlowData_t));
+#endif
+#if BRIDGE_TX_OPTICAL_FLOW_VEL
+CSYN_TOPIC_DEFINE(csyn_optical_flow_vel, SYNAPSE_TOPIC_OPTICAL_FLOW_VELOCITY_KEY, CSYN_DIR_TX,
+		  sizeof(synapse_topic_OpticalFlowVelocityData_t));
+#endif
 #if BRIDGE_RX_RTCM3
 CSYN_TOPIC_DEFINE(csyn_rtcm3, "rtcm3", CSYN_DIR_RX, sizeof(synapse_topic_Rtcm3_t));
 #endif
@@ -131,6 +153,12 @@ struct context {
 #endif
 #if BRIDGE_TX_TIME
 	synapse_topic_TimeReferenceData_t time_ref;
+#endif
+#if BRIDGE_TX_OPTICAL_FLOW
+	synapse_topic_OpticalFlowData_t optical_flow;
+#endif
+#if BRIDGE_TX_OPTICAL_FLOW_VEL
+	synapse_topic_OpticalFlowVelocityData_t optical_flow_vel;
 #endif
 #if BRIDGE_RX_RTCM3
 	/* inbound RTCM3 correction bytes, republished on topic_rtcm3 */
@@ -180,6 +208,19 @@ static const struct tx_binding tx_table[] = {
 	/* Time reference, rate from SPINALI_SYNAPSE_CSYN_TIME_RATE_HZ. */
 	{&topic_time_reference, &csyn_time, &g_ctx.time_ref, sizeof(g_ctx.time_ref),
 	 CONFIG_SPINALI_SYNAPSE_CSYN_TIME_RATE_HZ},
+#endif
+#if BRIDGE_TX_OPTICAL_FLOW
+	/* Processed optical flow (body-FLU integrated flow with fused range) from
+	 * the vehicle_optical_flow driver, rate from
+	 * SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_RATE_HZ. */
+	{&topic_optical_flow, &csyn_optical_flow, &g_ctx.optical_flow, sizeof(g_ctx.optical_flow),
+	 CONFIG_SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_RATE_HZ},
+#endif
+#if BRIDGE_TX_OPTICAL_FLOW_VEL
+	/* Tilt-compensated optical-flow velocity, rate from
+	 * SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_VEL_RATE_HZ. */
+	{&topic_optical_flow_vel, &csyn_optical_flow_vel, &g_ctx.optical_flow_vel,
+	 sizeof(g_ctx.optical_flow_vel), CONFIG_SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_VEL_RATE_HZ},
 #endif
 };
 BUILD_ASSERT(ARRAY_SIZE(tx_table) == BRIDGE_TX_COUNT);

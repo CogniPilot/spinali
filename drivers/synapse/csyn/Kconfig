@@ -59,6 +59,24 @@ config SPINALI_SYNAPSE_CSYN_IMU_RATE_HZ
 	  transport control plane. Prefer the batched InertialBatch path for high
 	  rate inertial.
 
+config SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_RATE_HZ
+	int "Optical flow mesh publish rate (Hz, 0 = off)"
+	default 25
+	help
+	  Upper rate at which the processed optical-flow sample (OpticalFlowData,
+	  body-FLU integrated flow with fused range) is republished onto the mesh,
+	  or 0 to not publish it. Carried only when SPINALI_VEHICLE_OPTICAL_FLOW is
+	  enabled, since that driver is the source topic.
+
+config SPINALI_SYNAPSE_CSYN_OPTICAL_FLOW_VEL_RATE_HZ
+	int "Optical flow velocity mesh publish rate (Hz, 0 = off)"
+	default 25
+	help
+	  Upper rate at which the tilt-compensated optical-flow velocity
+	  (OpticalFlowVelocityData) is republished onto the mesh, or 0 to not
+	  publish it. This is the convenience layer for a consumer without a full
+	  estimator; a consumer running an estimator prefers the OpticalFlow sample.
+
 module = SPINALI_SYNAPSE_CSYN
 module-str = synapse_csyn
 source "subsys/logging/Kconfig.template.log_config"
