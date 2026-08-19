@@ -147,7 +147,7 @@ static int socket_open(struct sockaddr_in6 *destination)
 	struct net_if *iface = application_iface_get();
 	int fd;
 	int hop_limit = 1;
-	int priority = CONFIG_SPINALI_SYNAPSE_WIRE_PCP;
+	uint8_t priority = CONFIG_SPINALI_SYNAPSE_WIRE_PCP;
 
 	if (iface == NULL) {
 		return -ENETDOWN;
