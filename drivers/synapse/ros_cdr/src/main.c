@@ -33,14 +33,15 @@ LOG_MODULE_REGISTER(synapse_ros_cdr, CONFIG_SPINALI_SYNAPSE_ROS_CDR_LOG_LEVEL);
 
 #if defined(CONFIG_SPINALI_SYNAPSE_ROS_CDR_TOPIC_GNSS_FIX)
 typedef synapse_topic_GnssFix_t ros_cdr_sample_t;
-#define ROS_CDR_SESSION_ZID "ae9a22d313fc"
+#define ROS_CDR_SESSION_ZID "00000000000000000000ae9a22d313fc"
 #define ROS_CDR_TOPIC_KEY                                                                    \
 	"0/synapse/gnss_fix/synapse_msgs::msg::dds_::GnssFix_/"                              \
 	"RIHS01_ac8d665c1bf6f81796d95bdd6a2285537bbfcb34869ba0e042f8ce24f75d9f0e"
 #define ROS_CDR_NODE_TOKEN                                                                   \
-	"@ros2_lv/0/ae9a22d313fc/0/0/NN/%synapse%rtk_gnss/%synapse/rtk_gnss"
+	"@ros2_lv/0/" ROS_CDR_SESSION_ZID "/0/0/NN/%synapse%rtk_gnss/%synapse/rtk_gnss"
 #define ROS_CDR_PUBLISHER_TOKEN                                                              \
-	"@ros2_lv/0/ae9a22d313fc/0/1/MP/%synapse%rtk_gnss/%synapse/rtk_gnss/"               \
+	"@ros2_lv/0/" ROS_CDR_SESSION_ZID                                                     \
+	"/0/1/MP/%synapse%rtk_gnss/%synapse/rtk_gnss/"                                      \
 	"%synapse%gnss_fix/synapse_msgs::msg::dds_::GnssFix_/"                              \
 	"RIHS01_ac8d665c1bf6f81796d95bdd6a2285537bbfcb34869ba0e042f8ce24f75d9f0e/"         \
 	"2::,1:,:,:,,"
@@ -48,19 +49,21 @@ typedef synapse_topic_GnssFix_t ros_cdr_sample_t;
 #define ROS_CDR_TOPIC_NAME  "GnssFix"
 #define ROS_CDR_TOTAL_BYTES SYNAPSE_CDR_GNSS_FIX_TOTAL_BYTES
 static const uint8_t publisher_gid[16] = {
-	0x29U, 0xb9U, 0x06U, 0xffU, 0xbbU, 0x5fU, 0x32U, 0x7fU,
-	0x47U, 0xd2U, 0x82U, 0x03U, 0xcaU, 0x88U, 0xeeU, 0xf5U,
+	0x2aU, 0xf7U, 0xaaU, 0x7bU, 0xc5U, 0xdbU, 0x5bU, 0x47U,
+	0x80U, 0xe8U, 0x29U, 0x09U, 0xadU, 0x76U, 0x3dU, 0x56U,
 };
 #else
 typedef synapse_topic_OpticalFlowVelocityData_t ros_cdr_sample_t;
-#define ROS_CDR_SESSION_ZID "ae9a22e6165d"
+#define ROS_CDR_SESSION_ZID "00000000000000000000ae9a22e6165d"
 #define ROS_CDR_TOPIC_KEY                                                                    \
 	"0/synapse/optical_flow_velocity/synapse_msgs::msg::dds_::OpticalFlowVelocity_/"       \
 	"RIHS01_8f46bb3da905598105f99e502394842afa66d849de841143565a193074829d09"
 #define ROS_CDR_NODE_TOKEN                                                                   \
-	"@ros2_lv/0/ae9a22e6165d/0/0/NN/%synapse%optical_flow/%synapse/optical_flow"
+	"@ros2_lv/0/" ROS_CDR_SESSION_ZID                                                      \
+	"/0/0/NN/%synapse%optical_flow/%synapse/optical_flow"
 #define ROS_CDR_PUBLISHER_TOKEN                                                              \
-	"@ros2_lv/0/ae9a22e6165d/0/1/MP/%synapse%optical_flow/%synapse/optical_flow/"         \
+	"@ros2_lv/0/" ROS_CDR_SESSION_ZID                                                      \
+	"/0/1/MP/%synapse%optical_flow/%synapse/optical_flow/"                               \
 	"%synapse%optical_flow_velocity/synapse_msgs::msg::dds_::OpticalFlowVelocity_/"       \
 	"RIHS01_8f46bb3da905598105f99e502394842afa66d849de841143565a193074829d09/"           \
 	"2::,1:,:,:,,"
@@ -68,8 +71,8 @@ typedef synapse_topic_OpticalFlowVelocityData_t ros_cdr_sample_t;
 #define ROS_CDR_TOPIC_NAME  "OpticalFlowVelocity"
 #define ROS_CDR_TOTAL_BYTES SYNAPSE_CDR_OPTICAL_FLOW_VELOCITY_TOTAL_BYTES
 static const uint8_t publisher_gid[16] = {
-	0xa4U, 0xeaU, 0x1dU, 0xe0U, 0x1eU, 0x5cU, 0x00U, 0xeeU,
-	0xb5U, 0xc6U, 0xcaU, 0x30U, 0xf6U, 0x74U, 0x7fU, 0xbcU,
+	0xc7U, 0xf9U, 0x90U, 0x4bU, 0xf1U, 0x65U, 0x8dU, 0x64U,
+	0xb3U, 0x0aU, 0x91U, 0xf2U, 0x5fU, 0x2dU, 0xf8U, 0x5fU,
 };
 #endif
 
@@ -169,8 +172,11 @@ static int session_zid_validate(struct ros_cdr_context *ctx)
 	z_id_t zid = z_info_zid(z_loan(ctx->session));
 	z_owned_string_t text;
 	const char *data;
+	size_t expected_length;
 	size_t length;
+	size_t padding_length;
 	int result;
+	bool padding_valid;
 
 	result = z_id_to_string(&zid, &text);
 	if (result < 0) {
@@ -178,8 +184,15 @@ static int session_zid_validate(struct ros_cdr_context *ctx)
 	}
 	data = z_string_data(z_loan(text));
 	length = z_string_len(z_loan(text));
-	result = length == strlen(ROS_CDR_SESSION_ZID) &&
-			 memcmp(data, ROS_CDR_SESSION_ZID, length) == 0
+	expected_length = strlen(ROS_CDR_SESSION_ZID);
+	padding_length = length >= expected_length ? length - expected_length : 0U;
+	padding_valid = length == 32U && expected_length <= length;
+	for (size_t i = 0U; i < padding_length && padding_valid; i++) {
+		padding_valid = data[i] == '0';
+	}
+	result = padding_valid &&
+			 memcmp(&data[padding_length], ROS_CDR_SESSION_ZID,
+				expected_length) == 0
 			 ? 0
 			 : -EINVAL;
 	z_drop(z_move(text));
@@ -216,7 +229,7 @@ static int transport_open(struct ros_cdr_context *ctx)
 	}
 	if (zp_config_insert(z_loan_mut(config), Z_CONFIG_SESSION_ZID_KEY,
 			     ROS_CDR_SESSION_ZID) < 0 ||
-	    zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, "peer") < 0 ||
+	    zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, "client") < 0 ||
 	    zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY,
 			     CONFIG_SPINALI_SYNAPSE_ROS_CDR_ROUTER) < 0 ||
 	    zp_config_insert(z_loan_mut(config), Z_CONFIG_MULTICAST_SCOUTING_KEY, "false") < 0) {
@@ -336,7 +349,8 @@ static int sample_publish(struct ros_cdr_context *ctx)
 	size_t written = 0U;
 	z_owned_bytes_t payload;
 	z_owned_bytes_t attachment_bytes;
-	z_publisher_put_options_t options;
+	z_put_options_t options;
+	z_view_keyexpr_t topic_keyexpr;
 	int result;
 
 	result = sample_encode(ctx, cdr, sizeof(cdr), &written);
@@ -359,9 +373,17 @@ static int sample_publish(struct ros_cdr_context *ctx)
 		return result;
 	}
 
-	z_publisher_put_options_default(&options);
+	result = z_view_keyexpr_from_str(&topic_keyexpr, ROS_CDR_TOPIC_KEY);
+	if (result < 0) {
+		z_drop(z_move(attachment_bytes));
+		z_drop(z_move(payload));
+		return result;
+	}
+
+	z_put_options_default(&options);
+	options.reliability = Z_RELIABILITY_BEST_EFFORT;
 	options.attachment = z_move(attachment_bytes);
-	return z_publisher_put(z_loan(ctx->publisher), z_move(payload), &options);
+	return z_put(z_loan(ctx->session), z_loan(topic_keyexpr), z_move(payload), &options);
 }
 
 static void ros_cdr_run(void *first, void *second, void *third)
