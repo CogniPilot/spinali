@@ -76,6 +76,15 @@ if(CONFIG_SPINALI_SYNAPSE_WIRE)
   target_link_libraries(app PRIVATE synapse_fbs::wire)
 endif()
 
+if(CONFIG_SPINALI_SYNAPSE_ROS_CDR)
+  if(NOT TARGET synapse_fbs::cdr)
+    message(FATAL_ERROR
+      "SPINALI_SYNAPSE_FBS_ROOT must provide synapse_fbs::cdr"
+    )
+  endif()
+  target_link_libraries(app PRIVATE synapse_fbs::cdr)
+endif()
+
 target_include_directories(app SYSTEM BEFORE PRIVATE ${ZEPHYR_BASE}/include ${CMAKE_BINARY_DIR})
 
 # vi: ts=2 sw=2 et

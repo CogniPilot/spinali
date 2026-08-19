@@ -3,7 +3,6 @@
 config SPINALI_SYNAPSE_WIRE
 	bool "Direct Synapse UDP/IPv6 publisher"
 	default n
-	depends on SPINALI_VEHICLE_OPTICAL_FLOW
 	depends on ZROS
 	depends on NETWORKING
 	depends on NET_IPV6
@@ -16,19 +15,40 @@ config SPINALI_SYNAPSE_WIRE
 
 if SPINALI_SYNAPSE_WIRE
 
+choice SPINALI_SYNAPSE_WIRE_TOPIC
+	prompt "Direct-wire topic"
+	default SPINALI_SYNAPSE_WIRE_TOPIC_OPTICAL_FLOW if SPINALI_VEHICLE_OPTICAL_FLOW
+	default SPINALI_SYNAPSE_WIRE_TOPIC_GNSS_FIX if ZROS_SENSE_GNSS
+
+config SPINALI_SYNAPSE_WIRE_TOPIC_OPTICAL_FLOW
+	bool "OpticalFlowVelocity"
+	depends on SPINALI_VEHICLE_OPTICAL_FLOW
+
+config SPINALI_SYNAPSE_WIRE_TOPIC_GNSS_FIX
+	bool "GnssFix"
+	depends on ZROS_SENSE_GNSS
+
+endchoice
+
 config SPINALI_SYNAPSE_WIRE_DESTINATION
-	string "Optical-flow destination IPv6 address"
+	string "Destination IPv6 address"
 	default "fe80::4:9fff:fe00:150"
 
+config SPINALI_SYNAPSE_WIRE_DESTINATION_MAC
+	string "Destination Ethernet address"
+	default "02:04:9f:00:01:50"
+
 config SPINALI_SYNAPSE_WIRE_SOURCE_NODE_ID
-	int "Optical-flow source node ID"
+	int "Source node ID"
 	range 1 4294967295
-	default 12
+	default 12 if SPINALI_SYNAPSE_WIRE_TOPIC_OPTICAL_FLOW
+	default 11 if SPINALI_SYNAPSE_WIRE_TOPIC_GNSS_FIX
 
 config SPINALI_SYNAPSE_WIRE_PORT
-	int "Optical-flow UDP port"
+	int "UDP port"
 	range 1 65535
-	default 46010
+	default 46010 if SPINALI_SYNAPSE_WIRE_TOPIC_OPTICAL_FLOW
+	default 46008 if SPINALI_SYNAPSE_WIRE_TOPIC_GNSS_FIX
 
 config SPINALI_SYNAPSE_WIRE_VLAN_ID
 	int "Application VLAN ID"
@@ -41,9 +61,10 @@ config SPINALI_SYNAPSE_WIRE_PCP
 	default 5
 
 config SPINALI_SYNAPSE_WIRE_RATE_HZ
-	int "Maximum OpticalFlowVelocity publish rate"
+	int "Maximum publish rate"
 	range 1 1000
-	default 70
+	default 70 if SPINALI_SYNAPSE_WIRE_TOPIC_OPTICAL_FLOW
+	default 10 if SPINALI_SYNAPSE_WIRE_TOPIC_GNSS_FIX
 
 config SPINALI_SYNAPSE_WIRE_THREAD_STACK_SIZE
 	int "Direct-wire publisher stack size"

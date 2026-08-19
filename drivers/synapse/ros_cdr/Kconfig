@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config SPINALI_SYNAPSE_ROS_CDR
+	bool "ROS 2 CDR mirror over Zenoh"
+	default n
+	depends on ZROS
+	depends on NETWORKING
+	depends on NET_IPV6
+	depends on NET_VLAN
+	depends on ZENOH_PICO
+	depends on ZENOH_PICO_MULTI_THREAD
+	depends on ZENOH_PICO_PUBLICATION
+	depends on ZENOH_PICO_LINK_UDP_UNICAST
+	depends on ZENOH_PICO_UNSTABLE_API
+	help
+	  Publish selected Synapse topics as ROS-compatible CDRv1 mirrors through
+	  Zenoh. The direct synapse_wire path remains independent and authoritative.
+
+if SPINALI_SYNAPSE_ROS_CDR
+
+choice SPINALI_SYNAPSE_ROS_CDR_TOPIC
+	prompt "ROS CDR mirror topic"
+	default SPINALI_SYNAPSE_ROS_CDR_TOPIC_OPTICAL_FLOW if SPINALI_VEHICLE_OPTICAL_FLOW
+	default SPINALI_SYNAPSE_ROS_CDR_TOPIC_GNSS_FIX if ZROS_SENSE_GNSS
+
+config SPINALI_SYNAPSE_ROS_CDR_TOPIC_OPTICAL_FLOW
+	bool "OpticalFlowVelocity"
+	depends on SPINALI_VEHICLE_OPTICAL_FLOW
+
+config SPINALI_SYNAPSE_ROS_CDR_TOPIC_GNSS_FIX
+	bool "GnssFix"
+	depends on ZROS_SENSE_GNSS
+
+endchoice
+
+config SPINALI_SYNAPSE_ROS_CDR_ROUTER
+	string "Zenoh router locator"
+	default "udp/[fe80::f22f:74ff:fecc:4a66]:7447#iface=eth0"
+
+config SPINALI_SYNAPSE_ROS_CDR_ROUTER_ADDRESS
+	string "Zenoh router IPv6 neighbor address"
+	default "fe80::f22f:74ff:fecc:4a66"
+
+config SPINALI_SYNAPSE_ROS_CDR_ROUTER_MAC
+	string "Zenoh router Ethernet address"
+	default "f0:2f:74:cc:4a:66"
+
+config SPINALI_SYNAPSE_ROS_CDR_VLAN_ID
+	int "Application VLAN ID"
+	range 1 4094
+	default 58
+
+config SPINALI_SYNAPSE_ROS_CDR_RATE_HZ
+	int "Mirror rate"
+	range 1 1000
+	default 20 if SPINALI_SYNAPSE_ROS_CDR_TOPIC_OPTICAL_FLOW
+	default 10 if SPINALI_SYNAPSE_ROS_CDR_TOPIC_GNSS_FIX
+
+config SPINALI_SYNAPSE_ROS_CDR_THREAD_STACK_SIZE
+	int "CDR mirror publisher stack size"
+	range 2048 16384
+	default 8192
+
+config SPINALI_SYNAPSE_ROS_CDR_THREAD_PRIORITY
+	int "CDR mirror publisher priority"
+	default 7
+
+module = SPINALI_SYNAPSE_ROS_CDR
+module-str = synapse_ros_cdr
+source "subsys/logging/Kconfig.template.log_config"
+
+endif
