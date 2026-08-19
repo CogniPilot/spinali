@@ -6,6 +6,15 @@
 
 cmake_minimum_required(VERSION 3.13.1)
 
+set(SPINALI_SYNAPSE_FBS_ROOT "" CACHE PATH "Generated Synapse C package")
+if(NOT SPINALI_SYNAPSE_FBS_ROOT AND DEFINED ENV{SPINALI_SYNAPSE_FBS_ROOT})
+  set(SPINALI_SYNAPSE_FBS_ROOT "$ENV{SPINALI_SYNAPSE_FBS_ROOT}" CACHE PATH
+    "Generated Synapse C package" FORCE)
+endif()
+if(SPINALI_SYNAPSE_FBS_ROOT)
+  list(APPEND ZEPHYR_EXTRA_MODULES ${SPINALI_SYNAPSE_FBS_ROOT})
+endif()
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(optical_flow LANGUAGES C)
@@ -57,6 +66,15 @@ set_source_files_properties(
   )
 
 target_sources(app PRIVATE ${SOURCE_FILES})
+
+if(CONFIG_SPINALI_SYNAPSE_WIRE)
+  if(NOT TARGET synapse_fbs::wire)
+    message(FATAL_ERROR
+      "SPINALI_SYNAPSE_FBS_ROOT must provide synapse_fbs::wire"
+    )
+  endif()
+  target_link_libraries(app PRIVATE synapse_fbs::wire)
+endif()
 
 target_include_directories(app SYSTEM BEFORE PRIVATE ${ZEPHYR_BASE}/include ${CMAKE_BINARY_DIR})
 

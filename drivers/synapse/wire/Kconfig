@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config SPINALI_SYNAPSE_WIRE
+	bool "Direct Synapse UDP/IPv6 publisher"
+	default n
+	depends on SPINALI_VEHICLE_OPTICAL_FLOW
+	depends on ZROS
+	depends on NETWORKING
+	depends on NET_IPV6
+	depends on NET_UDP
+	depends on NET_SOCKETS
+	depends on NET_VLAN
+	help
+	  Publish selected fixed-layout Synapse samples through the direct
+	  synapse_wire UDP/IPv6 path. This transport does not use CSYN or Zenoh.
+
+if SPINALI_SYNAPSE_WIRE
+
+config SPINALI_SYNAPSE_WIRE_DESTINATION
+	string "Optical-flow destination IPv6 address"
+	default "fe80::4:9fff:fe00:150"
+
+config SPINALI_SYNAPSE_WIRE_SOURCE_NODE_ID
+	int "Optical-flow source node ID"
+	range 1 4294967295
+	default 12
+
+config SPINALI_SYNAPSE_WIRE_PORT
+	int "Optical-flow UDP port"
+	range 1 65535
+	default 46010
+
+config SPINALI_SYNAPSE_WIRE_VLAN_ID
+	int "Application VLAN ID"
+	range 1 4094
+	default 58
+
+config SPINALI_SYNAPSE_WIRE_PCP
+	int "Application VLAN priority"
+	range 0 7
+	default 5
+
+config SPINALI_SYNAPSE_WIRE_RATE_HZ
+	int "Maximum OpticalFlowVelocity publish rate"
+	range 1 1000
+	default 70
+
+config SPINALI_SYNAPSE_WIRE_THREAD_STACK_SIZE
+	int "Direct-wire publisher stack size"
+	range 1024 8192
+	default 2048
+
+config SPINALI_SYNAPSE_WIRE_THREAD_PRIORITY
+	int "Direct-wire publisher priority"
+	default 6
+
+module = SPINALI_SYNAPSE_WIRE
+module-str = synapse_wire
+source "subsys/logging/Kconfig.template.log_config"
+
+endif
