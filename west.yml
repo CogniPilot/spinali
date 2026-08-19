@@ -58,7 +58,3 @@ manifest:
       url: https://github.com/CogniPilot/zenoh-pico.git
       revision: golden # native Zephyr threads/clocks/zsock (POSIX-free) + UDP-multicast/IPv6 fixes
       path: modules/lib/zenoh-pico
-    - name: csyn
-      remote: cognipilot
-      revision: golden # synapse_fbs 0.10.0 + NET_SOCKETS gate + configurable zenoh posture
-      path: modules/lib/csyn

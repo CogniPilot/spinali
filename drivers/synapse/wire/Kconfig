@@ -12,7 +12,7 @@ config SPINALI_SYNAPSE_WIRE
 	depends on NET_VLAN
 	help
 	  Publish selected fixed-layout Synapse samples through the direct
-	  synapse_wire UDP/IPv6 path. This transport does not use CSYN or Zenoh.
+	  synapse_wire UDP/IPv6 path. This transport does not use Zenoh.
 
 if SPINALI_SYNAPSE_WIRE
 
