@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: golden # fleet unified: enet_qos pass-all-multicast + icm45686 stream + shell/crsf
+      revision: a9def9dfbf41fb53311b72c0ef0e1c7a1f1ce04b
       import:
         - name-allowlist:
           - mbedtls
@@ -52,5 +52,5 @@ manifest:
       path: modules/lib/hcdf_models
     - name: zenoh-pico
       url: https://github.com/CogniPilot/zenoh-pico.git
-      revision: golden # native Zephyr threads/clocks/zsock (POSIX-free) + UDP-multicast/IPv6 fixes
+      revision: 4125a0437ad52adfe0d43e92c4ec3dcbe0e5fca8
       path: modules/lib/zenoh-pico
