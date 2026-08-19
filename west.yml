@@ -38,10 +38,6 @@ manifest:
       remote: cognipilot
       revision: 3f80b3ba8803abc02ad7382cc027658b05c07ca6 # main
       path: modules/lib/zros
-    - name: cyecca
-      remote: cognipilot
-      revision: 64d1f0dc5127d85765909f0c3525cc38305dac19 # main 11/17/25
-      path: modules/lib/cyecca
     - name: zros_drivers
       remote: cognipilot
       revision: golden # streamed sensors off protobuf, tesla mag, per-sample time_status

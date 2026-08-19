@@ -8,33 +8,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 zephyr_include_directories(include)
 
-find_program(POETRY poetry)
-if (NOT POETRY)
-	message(FATAL_ERROR "install poetry via: apt install python3-poetry or pipx install poetry")
-endif()
-set(SPINALI_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-set(CYECCA_ROOT "" CACHE PATH "Cyecca source checkout")
-if(NOT CYECCA_ROOT AND DEFINED ENV{CYECCA_ROOT})
-	set(CYECCA_ROOT "$ENV{CYECCA_ROOT}" CACHE PATH "Cyecca source checkout" FORCE)
-endif()
-if(NOT CYECCA_ROOT)
-	get_filename_component(CYECCA_ROOT
-		"${SPINALI_ROOT_DIR}/../../modules/lib/cyecca" ABSOLUTE)
-endif()
-if(NOT EXISTS "${CYECCA_ROOT}/pyproject.toml")
-	message(FATAL_ERROR
-		"CYECCA_ROOT must identify a Cyecca checkout containing pyproject.toml")
-endif()
-set(CYECCA_PYTHON ${CMAKE_COMMAND} -E env
-	"CYECCA_ROOT=${CYECCA_ROOT}" ${SPINALI_ROOT_DIR}/scripts/cyecca_python)
-
-execute_process(
-	COMMAND ${CMAKE_COMMAND} -E env "CYECCA_ROOT=${CYECCA_ROOT}"
-		${CMAKE_CURRENT_SOURCE_DIR}/scripts/cyecca_install
-	COMMAND_ECHO STDOUT
-	COMMAND_ERROR_IS_FATAL ANY
-	)
-
 add_subdirectory(lib)
 add_subdirectory(drivers)
 
