@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: a9def9dfbf41fb53311b72c0ef0e1c7a1f1ce04b
+      revision: 85216b72231c5aea52cf31deb678e9405c83a164
       import:
         - name-allowlist:
           - mbedtls
@@ -40,15 +40,15 @@ manifest:
       path: modules/lib/zros
     - name: zros_drivers
       remote: cognipilot
-      revision: golden # streamed sensors off protobuf, tesla mag, per-sample time_status
+      revision: 967062690c07a38db9ee16d5f7a0767684fb1d4b
       path: modules/lib/zros_drivers
     - name: zephyr_boards
       remote: cognipilot
-      revision: golden # 614eed3 (main) + tropic RT1064 board fixes (inert for mcxn)
+      revision: 1d7c17e875938082f024e80d114ac82c25aa53a9
       path: modules/lib/zephyr_boards
     - name: hcdf_models
       remote: cognipilot
-      revision: main
+      revision: 2a06acf56ed127e2d3ae37fc24bb0c37964ef193
       path: modules/lib/hcdf_models
     - name: zenoh-pico
       url: https://github.com/CogniPilot/zenoh-pico.git
