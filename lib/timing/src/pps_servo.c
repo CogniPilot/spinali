@@ -145,8 +145,21 @@ struct pps_servo {
 	bool leap61;
 	bool leap59;
 
+	/* Uptime (ms) of the most recent PPS edge accepted by the servo work
+	 * handler. The degrade timer reads it to refuse demoting a reference
+	 * that is still receiving edges, so a scheduling artifact cannot fire
+	 * a spurious free-run announcement.
+	 */
+	int64_t last_edge_uptime_ms;
+
 	struct k_work work;
+	/* holdover_work is the 2.5 s no-edge detector: LOCKED to HOLDOVER.
+	 * degrade_work is the separate, longer HOLDOVER to FREERUN timer,
+	 * armed only on entry to holdover and cancelled on any fresh edge, so
+	 * the two deadlines never share one delayable item.
+	 */
 	struct k_work_delayable holdover_work;
+	struct k_work_delayable degrade_work;
 	struct k_work rtc_work;
 };
 
@@ -420,7 +433,15 @@ static void servo_work_handler(struct k_work *work)
 		return;
 	}
 
+	/* A fresh edge proves the reference is alive: push the no-edge
+	 * detector back out and cancel any pending free-run degrade, so an
+	 * outage timer armed during a momentary gap cannot demote a healthy
+	 * grandmaster. The edge time is recorded for the degrade handler's
+	 * defensive re-check.
+	 */
+	servo.last_edge_uptime_ms = k_uptime_get();
 	k_work_reschedule(&servo.holdover_work, K_MSEC(2500));
+	k_work_cancel_delayable(&servo.degrade_work);
 
 	/* Pair the edge with a fresh TIM-TP label. */
 	struct ubx_tim_tp tp;
@@ -543,6 +564,10 @@ static void servo_work_handler(struct k_work *work)
 				atomic_set(&servo.ever_locked, 1);
 				LOG_INF("Servo LOCKED (|err| < %lld ns for %d samples)",
 					LOCK_THRESHOLD_NS, LOCK_COUNT);
+				/* Fresh lock: a degrade armed during the preceding
+				 * outage must not survive back into locked service.
+				 */
+				k_work_cancel_delayable(&servo.degrade_work);
 				servo_request_rtc_update(gnss_ns);
 				servo_announce(GM_CLASS_LOCKED, "locked");
 			}
@@ -568,6 +593,13 @@ static void servo_work_handler(struct k_work *work)
 		servo.locked ? "LOCKED" : "tracking");
 }
 
+/* No PPS edge for 2.5 s. This is only the LOCKED to HOLDOVER detector: it
+ * never announces free-run. On entry to holdover it arms the separate
+ * degrade timer, which is the sole path to free-run and is cancelled by any
+ * fresh edge. If it fires again while already in holdover (a lone edge kept
+ * the reference nominally alive, then stopped), it re-arms the degrade so a
+ * genuine continuous outage still degrades.
+ */
 static void holdover_work_handler(struct k_work *work)
 {
 	ARG_UNUSED(work);
@@ -576,25 +608,47 @@ static void holdover_work_handler(struct k_work *work)
 	servo.lock_streak = 0;
 
 	if (servo.announced_class == GM_CLASS_LOCKED) {
-		/* First 2.5 s without a PPS edge: freeze at the learned rate
-		 * and announce holdover. Arm a bounded degrade so an extended
-		 * outage cannot keep advertising 100 us accuracy forever. A
-		 * fresh edge reschedules this work back to the 2.5 s deadline
-		 * in servo_work_handler, cancelling the degrade.
-		 */
 		LOG_WRN("PPS lost - HOLDOVER at %+d ppb (crystal free-run)",
 			(int)servo.integ_ppb);
 		servo_announce(GM_CLASS_HOLDOVER, "holdover");
-		k_work_reschedule(&servo.holdover_work, K_SECONDS(HOLDOVER_DEGRADE_S));
+		k_work_reschedule(&servo.degrade_work, K_SECONDS(HOLDOVER_DEGRADE_S));
 	} else if (servo.announced_class == GM_CLASS_HOLDOVER) {
-		/* Coast has exceeded HOLDOVER_DEGRADE_S: drop to the
-		 * free-running default so downstream clocks and BMCA stop
-		 * treating this node as a GPS-traceable grandmaster.
-		 */
-		LOG_WRN("HOLDOVER exceeded %d s - dropping to free-run class",
-			HOLDOVER_DEGRADE_S);
-		servo_announce(GM_CLASS_FREERUN, "holdover degrade");
+		k_work_reschedule(&servo.degrade_work, K_SECONDS(HOLDOVER_DEGRADE_S));
 	}
+}
+
+/* HOLDOVER to FREERUN. Armed only on entry to holdover and cancelled on any
+ * fresh edge, so reaching here should mean a genuine continuous outage. As a
+ * defence against a scheduling artifact firing this early, re-check the time
+ * since the last accepted edge: if an edge arrived inside the holdover
+ * window, the reference is not actually coasting, so abort and re-arm for
+ * the remaining time rather than demote a healthy grandmaster.
+ */
+static void degrade_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+
+	if (servo.announced_class != GM_CLASS_HOLDOVER) {
+		return;
+	}
+
+	int64_t since_edge_ms = k_uptime_get() - servo.last_edge_uptime_ms;
+	int64_t window_ms = (int64_t)HOLDOVER_DEGRADE_S * MSEC_PER_SEC;
+
+	if (since_edge_ms < window_ms) {
+		LOG_WRN("degrade deferred: PPS edge %lld ms ago, within holdover window",
+			since_edge_ms);
+		k_work_reschedule(&servo.degrade_work, K_MSEC(window_ms - since_edge_ms));
+		return;
+	}
+
+	/* Coast has exceeded HOLDOVER_DEGRADE_S: drop to the free-running
+	 * default so downstream clocks and BMCA stop treating this node as a
+	 * GPS-traceable grandmaster.
+	 */
+	LOG_WRN("HOLDOVER exceeded %d s - dropping to free-run class",
+		HOLDOVER_DEGRADE_S);
+	servo_announce(GM_CLASS_FREERUN, "holdover degrade");
 }
 
 bool pps_servo_disciplined(void)
@@ -623,6 +677,7 @@ static int pps_servo_init(void)
 
 	k_work_init(&servo.work, servo_work_handler);
 	k_work_init_delayable(&servo.holdover_work, holdover_work_handler);
+	k_work_init_delayable(&servo.degrade_work, degrade_work_handler);
 	k_work_init(&servo.rtc_work, servo_rtc_work_handler);
 
 	if (!device_is_ready(servo.phc) || !device_is_ready(servo.gnss)) {
