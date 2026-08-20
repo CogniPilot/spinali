@@ -71,15 +71,30 @@ LOG_MODULE_REGISTER(pps_servo, LOG_LEVEL_INF);
 /* Announced grandmaster quality. Class 6 is a clock synchronized to a
  * primary reference, class 7 the same clock in holdover. Accuracy 0x21
  * (100 ns) matches the locked servo; 0x27 (100 us) bounds the drift of
- * the frozen learned rate over an outage long enough to matter. Time
- * source 0x20 is GPS. Anything before the first lock stays at the
- * Kconfig defaults (class 248, internal oscillator).
+ * the frozen learned rate over a short outage. Time source 0x20 is GPS.
+ * Class 248 with unknown accuracy (0xFE) and the internal-oscillator
+ * time source (0xA0) is the free-running default: it is what the node
+ * advertises before the first lock, and what it falls back to once a
+ * holdover coast has run long enough that 100 us can no longer be
+ * honestly claimed.
  */
-#define GM_CLASS_LOCKED	   6
-#define GM_CLASS_HOLDOVER  7
-#define GM_ACCURACY_100NS  0x21
-#define GM_ACCURACY_100US  0x27
-#define GM_TIME_SOURCE_GPS 0x20
+#define GM_CLASS_LOCKED	    6
+#define GM_CLASS_HOLDOVER   7
+#define GM_CLASS_FREERUN    248
+#define GM_ACCURACY_100NS   0x21
+#define GM_ACCURACY_100US   0x27
+#define GM_ACCURACY_UNKNOWN 0xFE
+#define GM_TIME_SOURCE_GPS  0x20
+#define GM_TIME_SOURCE_OSC  0xA0
+
+/* Bounded holdover: after this many seconds without a fresh PPS edge the
+ * frozen rate can no longer be trusted to 100 us, so the node drops out
+ * of primary-reference status rather than advertising 100 us forever.
+ * Sized on the order of minutes: a frozen-rate oscillator holds well
+ * inside 100 us for tens of seconds, but temperature-driven drift erodes
+ * that bound over minutes.
+ */
+#define HOLDOVER_DEGRADE_S 300
 
 enum servo_state {
 	SERVO_WAIT_LABEL,
@@ -248,10 +263,12 @@ static void servo_announce_time_props(void)
 	}
 
 	/* Frequency is traceable only while the servo is steering the PHC
-	 * from PPS; time stays traceable through holdover.
+	 * from PPS; time stays traceable through holdover, but not once the
+	 * coast has degraded the node back to the free-running default.
 	 */
 	gptp_update_time_properties(servo.utc_offset, servo.utc_offset_valid,
-				    servo.leap61, servo.leap59, true,
+				    servo.leap61, servo.leap59,
+				    servo.announced_class != GM_CLASS_FREERUN,
 				    servo.announced_class == GM_CLASS_LOCKED);
 }
 
@@ -260,6 +277,9 @@ static void servo_announce_time_props(void)
  */
 static void servo_announce(uint8_t clock_class, const char *reason)
 {
+	uint8_t accuracy;
+	uint8_t time_source;
+
 	if (clock_class == servo.announced_class) {
 		return;
 	}
@@ -272,11 +292,25 @@ static void servo_announce(uint8_t clock_class, const char *reason)
 		return;
 	}
 
+	switch (clock_class) {
+	case GM_CLASS_LOCKED:
+		accuracy = GM_ACCURACY_100NS;
+		time_source = GM_TIME_SOURCE_GPS;
+		break;
+	case GM_CLASS_HOLDOVER:
+		accuracy = GM_ACCURACY_100US;
+		time_source = GM_TIME_SOURCE_GPS;
+		break;
+	default: /* GM_CLASS_FREERUN */
+		accuracy = GM_ACCURACY_UNKNOWN;
+		time_source = GM_TIME_SOURCE_OSC;
+		break;
+	}
+
 	const struct gptp_gm_quality quality = {
 		.clock_class = clock_class,
-		.clock_accuracy = (clock_class == GM_CLASS_LOCKED) ? GM_ACCURACY_100NS
-								   : GM_ACCURACY_100US,
-		.time_source = GM_TIME_SOURCE_GPS,
+		.clock_accuracy = accuracy,
+		.time_source = time_source,
 	};
 
 	gptp_update_gm_quality(&quality);
@@ -363,6 +397,19 @@ static void servo_work_handler(struct k_work *work)
 		 */
 		struct net_ptp_time now;
 
+		/* A step is a phase discontinuity of up to STEP_THRESHOLD_NS.
+		 * If the node is currently announcing a locked primary
+		 * reference, demote to holdover quality before jumping, so it
+		 * does not advertise class 6 and 100 ns accuracy across the
+		 * discontinuity. LOCKED is re-announced only after the normal
+		 * fresh-lock streak is met again. This is skipped for the seed
+		 * step before the first lock, when the node is still on the
+		 * free-running default and servo_announce() is a no-op.
+		 */
+		if (servo.announced_class == GM_CLASS_LOCKED) {
+			servo_announce(GM_CLASS_HOLDOVER, "phase step");
+		}
+
 		ptp_clock_get(servo.phc, &now);
 
 		uint64_t now_ns = ((uint64_t)now.second * NSEC_PER_SEC) + now.nanosecond +
@@ -447,12 +494,29 @@ static void holdover_work_handler(struct k_work *work)
 {
 	ARG_UNUSED(work);
 
-	/* No PPS edge for 2.5 s: freeze at the learned rate. */
-	LOG_WRN("PPS lost - HOLDOVER at %+d ppb (crystal free-run)",
-		(int)servo.integ_ppb);
 	servo.locked = false;
 	servo.lock_streak = 0;
-	servo_announce(GM_CLASS_HOLDOVER, "holdover");
+
+	if (servo.announced_class == GM_CLASS_LOCKED) {
+		/* First 2.5 s without a PPS edge: freeze at the learned rate
+		 * and announce holdover. Arm a bounded degrade so an extended
+		 * outage cannot keep advertising 100 us accuracy forever. A
+		 * fresh edge reschedules this work back to the 2.5 s deadline
+		 * in servo_work_handler, cancelling the degrade.
+		 */
+		LOG_WRN("PPS lost - HOLDOVER at %+d ppb (crystal free-run)",
+			(int)servo.integ_ppb);
+		servo_announce(GM_CLASS_HOLDOVER, "holdover");
+		k_work_reschedule(&servo.holdover_work, K_SECONDS(HOLDOVER_DEGRADE_S));
+	} else if (servo.announced_class == GM_CLASS_HOLDOVER) {
+		/* Coast has exceeded HOLDOVER_DEGRADE_S: drop to the
+		 * free-running default so downstream clocks and BMCA stop
+		 * treating this node as a GPS-traceable grandmaster.
+		 */
+		LOG_WRN("HOLDOVER exceeded %d s - dropping to free-run class",
+			HOLDOVER_DEGRADE_S);
+		servo_announce(GM_CLASS_FREERUN, "holdover degrade");
+	}
 }
 
 bool pps_servo_disciplined(void)
