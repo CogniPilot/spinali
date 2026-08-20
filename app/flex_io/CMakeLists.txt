@@ -10,6 +10,12 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(flex_io LANGUAGES C)
 
+# Validate HCDF SHA at build time
+if(DEFINED ZEPHYR_HCDF_MODELS_MODULE_DIR)
+  include(${ZEPHYR_HCDF_MODELS_MODULE_DIR}/cmake/hcdf.cmake)
+  hcdf_validate_sha(BOARD mr_mcxn_t1 DEVICE flex-io)
+endif()
+
 set(flags
   -std=c11
   -Wall
