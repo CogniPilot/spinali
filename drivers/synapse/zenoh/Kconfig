@@ -31,11 +31,14 @@ endchoice
 
 config ZENOH_LOCATOR
 	string "Zenoh endpoint locator"
-	default "tcp/10.58.0.1:7447" if SPINALI_SYNAPSE_ZENOH_MODE_CLIENT
+	default "udp/[fe80::f22f:74ff:fecc:4a66]:7447#iface=vlan0" if SPINALI_SYNAPSE_ZENOH_MODE_CLIENT
 	default "udp/224.0.0.224:7446" if SPINALI_SYNAPSE_ZENOH_MODE_PEER
 	help
 	  In client mode, the zenoh router address to connect to. In peer mode,
 	  the UDP multicast locator used for peer discovery on the local segment.
+	  The client-mode router locator is a per-deployment input: the address
+	  shown is the host router's link-local IPv6 endpoint on the VLAN mirror
+	  path and should be set to match the deployment's router.
 
 config SPINALI_SYNAPSE_ZENOH_NAMESPACE
 	string "Deployment namespace for bare catalog keys"
