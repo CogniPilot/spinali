@@ -115,6 +115,20 @@
 	status = "okay";
 };
 
+/* Role-derived interface identity for node 13 (flex_io).
+ * Locally administered MAC whose final 12 bits read as the decimal node id
+ * followed by a zero in hex, so node 13 is 02:04:9f:00:01:30. The EUI-64
+ * IPv6 link-local address follows from it as fe80::4:9fff:fe00:130. The role
+ * MAC replaces the silicon-derived nxp,unique-mac from the board dtsi (the
+ * enet-qos driver honors local-mac-address only when nxp,unique-mac is
+ * absent), so the firmware image is identical across hardware sets. The gPTP
+ * clock identity is derived from this MAC, which is intended.
+ */
+&enet_mac {
+	/delete-property/ nxp,unique-mac;
+	local-mac-address = [ 02 04 9f 00 01 30 ];
+};
+
 /* ENET QoS PTP hardware clock (PHC): disabled by default in the SoC dtsi.
  * Enabled here so the gPTP time-receiver stack has a clock to discipline,
  * putting this node's timestamps on the shared network timescale.

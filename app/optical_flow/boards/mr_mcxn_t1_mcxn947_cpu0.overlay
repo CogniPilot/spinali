@@ -45,9 +45,20 @@
 
 /* icm45686_1 not aliased - not used for streaming */
 
-/* Lower ethernet MAC interrupt priority to prevent early RX before net stack ready */
+/* Lower ethernet MAC interrupt priority to prevent early RX before net stack
+ * ready. Also pins the role-derived interface identity for node 12
+ * (optical_flow): a locally administered MAC whose final 12 bits read as the
+ * decimal node id followed by a zero in hex, so node 12 is 02:04:9f:00:01:20.
+ * The EUI-64 IPv6 link-local address follows from it as fe80::4:9fff:fe00:120.
+ * The role MAC replaces the silicon-derived nxp,unique-mac from the board dtsi
+ * (the enet-qos driver honors local-mac-address only when nxp,unique-mac is
+ * absent), so the firmware image is identical across hardware sets. The gPTP
+ * clock identity is derived from this MAC, which is intended.
+ */
 &enet_mac {
 	interrupts = <0x8b 0x4>, <0x8c 0x4>, <0x8d 0x4>;
+	/delete-property/ nxp,unique-mac;
+	local-mac-address = [ 02 04 9f 00 01 20 ];
 };
 
 /* ENET QoS PTP hardware clock (PHC): disabled by default in the SoC dtsi.
