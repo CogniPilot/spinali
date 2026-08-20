@@ -14,6 +14,7 @@
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_ip.h>
 #include <zephyr/net/net_linkaddr.h>
+#include <zephyr/sys/printk.h>
 
 #include "ipv6.h"
 
@@ -33,14 +34,14 @@ LOG_MODULE_REGISTER(synapse_ros_cdr, CONFIG_SPINALI_SYNAPSE_ROS_CDR_LOG_LEVEL);
 
 #if defined(CONFIG_SPINALI_SYNAPSE_ROS_CDR_TOPIC_GNSS_FIX)
 typedef synapse_topic_GnssFix_t ros_cdr_sample_t;
-#define ROS_CDR_SESSION_ZID "00000000000000000000ae9a22d313fc"
+#define ROS_CDR_NODE_ID     11
+#define ROS_CDR_GID_TOPIC_TAG 0x01U
 #define ROS_CDR_TOPIC_KEY                                                                    \
 	"0/synapse/gnss_fix/synapse_msgs::msg::dds_::GnssFix_/"                              \
 	"RIHS01_ac8d665c1bf6f81796d95bdd6a2285537bbfcb34869ba0e042f8ce24f75d9f0e"
-#define ROS_CDR_NODE_TOKEN                                                                   \
-	"@ros2_lv/0/" ROS_CDR_SESSION_ZID "/0/0/NN/%synapse%rtk_gnss/%synapse/rtk_gnss"
-#define ROS_CDR_PUBLISHER_TOKEN                                                              \
-	"@ros2_lv/0/" ROS_CDR_SESSION_ZID                                                     \
+#define ROS_CDR_NODE_TOKEN_SUFFIX                                                            \
+	"/0/0/NN/%synapse%rtk_gnss/%synapse/rtk_gnss"
+#define ROS_CDR_PUBLISHER_TOKEN_SUFFIX                                                       \
 	"/0/1/MP/%synapse%rtk_gnss/%synapse/rtk_gnss/"                                      \
 	"%synapse%gnss_fix/synapse_msgs::msg::dds_::GnssFix_/"                              \
 	"RIHS01_ac8d665c1bf6f81796d95bdd6a2285537bbfcb34869ba0e042f8ce24f75d9f0e/"         \
@@ -48,21 +49,16 @@ typedef synapse_topic_GnssFix_t ros_cdr_sample_t;
 #define ROS_CDR_TOPIC       topic_nav_sat_fix
 #define ROS_CDR_TOPIC_NAME  "GnssFix"
 #define ROS_CDR_TOTAL_BYTES SYNAPSE_CDR_GNSS_FIX_TOTAL_BYTES
-static const uint8_t publisher_gid[16] = {
-	0x2aU, 0xf7U, 0xaaU, 0x7bU, 0xc5U, 0xdbU, 0x5bU, 0x47U,
-	0x80U, 0xe8U, 0x29U, 0x09U, 0xadU, 0x76U, 0x3dU, 0x56U,
-};
 #else
 typedef synapse_topic_OpticalFlowVelocityData_t ros_cdr_sample_t;
-#define ROS_CDR_SESSION_ZID "00000000000000000000ae9a22e6165d"
+#define ROS_CDR_NODE_ID     12
+#define ROS_CDR_GID_TOPIC_TAG 0x02U
 #define ROS_CDR_TOPIC_KEY                                                                    \
 	"0/synapse/optical_flow_velocity/synapse_msgs::msg::dds_::OpticalFlowVelocity_/"       \
 	"RIHS01_8f46bb3da905598105f99e502394842afa66d849de841143565a193074829d09"
-#define ROS_CDR_NODE_TOKEN                                                                   \
-	"@ros2_lv/0/" ROS_CDR_SESSION_ZID                                                      \
+#define ROS_CDR_NODE_TOKEN_SUFFIX                                                            \
 	"/0/0/NN/%synapse%optical_flow/%synapse/optical_flow"
-#define ROS_CDR_PUBLISHER_TOKEN                                                              \
-	"@ros2_lv/0/" ROS_CDR_SESSION_ZID                                                      \
+#define ROS_CDR_PUBLISHER_TOKEN_SUFFIX                                                       \
 	"/0/1/MP/%synapse%optical_flow/%synapse/optical_flow/"                               \
 	"%synapse%optical_flow_velocity/synapse_msgs::msg::dds_::OpticalFlowVelocity_/"       \
 	"RIHS01_8f46bb3da905598105f99e502394842afa66d849de841143565a193074829d09/"           \
@@ -70,10 +66,6 @@ typedef synapse_topic_OpticalFlowVelocityData_t ros_cdr_sample_t;
 #define ROS_CDR_TOPIC       topic_optical_flow_vel
 #define ROS_CDR_TOPIC_NAME  "OpticalFlowVelocity"
 #define ROS_CDR_TOTAL_BYTES SYNAPSE_CDR_OPTICAL_FLOW_VELOCITY_TOTAL_BYTES
-static const uint8_t publisher_gid[16] = {
-	0xc7U, 0xf9U, 0x90U, 0x4bU, 0xf1U, 0x65U, 0x8dU, 0x64U,
-	0xb3U, 0x0aU, 0x91U, 0xf2U, 0x5fU, 0x2dU, 0xf8U, 0x5fU,
-};
 #endif
 
 #define ATTACHMENT_SIZE 33U
@@ -92,6 +84,10 @@ struct ros_cdr_context {
 	uint32_t published;
 	uint32_t failed;
 	bool time_ever_synced;
+	char zid_str[33];
+	char node_token_key[128];
+	char publisher_token_key[320];
+	uint8_t publisher_gid[16];
 };
 
 static K_THREAD_STACK_DEFINE(g_stack, CONFIG_SPINALI_SYNAPSE_ROS_CDR_THREAD_STACK_SIZE);
@@ -167,36 +163,40 @@ static int router_neighbor_add(struct net_if *iface)
 		       : 0;
 }
 
-static int session_zid_validate(struct ros_cdr_context *ctx)
+/*
+ * Derive this node's Zenoh identity from its role, matching the locally
+ * administered MAC convention 02:04:9f:00:hh:ll where the low 12 bits spell the
+ * decimal node id followed by a hex zero (node 11 -> 0x110 -> 02:04:9f:00:01:10).
+ *
+ * The session ZID and publisher GID are built from the node's EUI-64 interface
+ * identifier 00:04:9f:ff:fe:00:hh:ll. The 32-character lowercase-hex ZID places
+ * the IID in the low 8 bytes and zero in the high 8 bytes. The zenoh-pico parser
+ * reads the string right-to-left, little-endian (the exact inverse of
+ * id-to-string), so printing the IID bytes in forward order after 16 leading
+ * zeros yields a string the opened session reports back unchanged. The publisher
+ * GID reuses the same IID root with a per-topic tag so every node and topic pair
+ * advertises a distinct, reproducible identity with no captured rmw_zenoh dump.
+ */
+static void role_identity_init(struct ros_cdr_context *ctx)
 {
-	z_id_t zid = z_info_zid(z_loan(ctx->session));
-	z_owned_string_t text;
-	const char *data;
-	size_t expected_length;
-	size_t length;
-	size_t padding_length;
-	int result;
-	bool padding_valid;
+	uint8_t bcd = (uint8_t)(((ROS_CDR_NODE_ID / 10) << 4) | (ROS_CDR_NODE_ID % 10));
+	uint16_t field = (uint16_t)((uint16_t)bcd << 4);
+	uint8_t hh = (uint8_t)(field >> 8);
+	uint8_t ll = (uint8_t)(field & 0xffU);
+	const uint8_t iid[8] = {0x00U, 0x04U, 0x9fU, 0xffU, 0xfeU, 0x00U, hh, ll};
 
-	result = z_id_to_string(&zid, &text);
-	if (result < 0) {
-		return result;
-	}
-	data = z_string_data(z_loan(text));
-	length = z_string_len(z_loan(text));
-	expected_length = strlen(ROS_CDR_SESSION_ZID);
-	padding_length = length >= expected_length ? length - expected_length : 0U;
-	padding_valid = length == 32U && expected_length <= length;
-	for (size_t i = 0U; i < padding_length && padding_valid; i++) {
-		padding_valid = data[i] == '0';
-	}
-	result = padding_valid &&
-			 memcmp(&data[padding_length], ROS_CDR_SESSION_ZID,
-				expected_length) == 0
-			 ? 0
-			 : -EINVAL;
-	z_drop(z_move(text));
-	return result;
+	(void)snprintk(ctx->zid_str, sizeof(ctx->zid_str),
+		       "%016x%02x%02x%02x%02x%02x%02x%02x%02x", 0U, iid[0], iid[1],
+		       iid[2], iid[3], iid[4], iid[5], iid[6], iid[7]);
+
+	(void)snprintk(ctx->node_token_key, sizeof(ctx->node_token_key), "@ros2_lv/0/%s%s",
+		       ctx->zid_str, ROS_CDR_NODE_TOKEN_SUFFIX);
+	(void)snprintk(ctx->publisher_token_key, sizeof(ctx->publisher_token_key),
+		       "@ros2_lv/0/%s%s", ctx->zid_str, ROS_CDR_PUBLISHER_TOKEN_SUFFIX);
+
+	memcpy(ctx->publisher_gid, iid, sizeof(iid));
+	ctx->publisher_gid[8] = ROS_CDR_GID_TOPIC_TAG;
+	memset(&ctx->publisher_gid[9], 0, sizeof(ctx->publisher_gid) - 9U);
 }
 
 static int token_declare(struct ros_cdr_context *ctx, const char *key,
@@ -228,7 +228,7 @@ static int transport_open(struct ros_cdr_context *ctx)
 		return result;
 	}
 	if (zp_config_insert(z_loan_mut(config), Z_CONFIG_SESSION_ZID_KEY,
-			     ROS_CDR_SESSION_ZID) < 0 ||
+			     ctx->zid_str) < 0 ||
 	    zp_config_insert(z_loan_mut(config), Z_CONFIG_MODE_KEY, "client") < 0 ||
 	    zp_config_insert(z_loan_mut(config), Z_CONFIG_CONNECT_KEY,
 			     CONFIG_SPINALI_SYNAPSE_ROS_CDR_ROUTER) < 0 ||
@@ -241,17 +241,13 @@ static int transport_open(struct ros_cdr_context *ctx)
 	if (result < 0) {
 		return result;
 	}
-	if (session_zid_validate(ctx) < 0) {
-		z_drop(z_move(ctx->session));
-		return -EINVAL;
-	}
 
-	result = token_declare(ctx, ROS_CDR_NODE_TOKEN, &ctx->node_token);
+	result = token_declare(ctx, ctx->node_token_key, &ctx->node_token);
 	if (result < 0) {
 		z_drop(z_move(ctx->session));
 		return result;
 	}
-	result = token_declare(ctx, ROS_CDR_PUBLISHER_TOKEN, &ctx->publisher_token);
+	result = token_declare(ctx, ctx->publisher_token_key, &ctx->publisher_token);
 	if (result < 0) {
 		z_drop(z_move(ctx->node_token));
 		z_drop(z_move(ctx->session));
@@ -360,8 +356,8 @@ static int sample_publish(struct ros_cdr_context *ctx)
 
 	store_i64_le(&attachment[0], ctx->publication_sequence++);
 	store_i64_le(&attachment[8], publication_timestamp_ns(ctx));
-	attachment[16] = (uint8_t)sizeof(publisher_gid);
-	memcpy(&attachment[17], publisher_gid, sizeof(publisher_gid));
+	attachment[16] = (uint8_t)sizeof(ctx->publisher_gid);
+	memcpy(&attachment[17], ctx->publisher_gid, sizeof(ctx->publisher_gid));
 
 	result = z_bytes_copy_from_buf(&payload, cdr, sizeof(cdr));
 	if (result < 0) {
@@ -401,6 +397,8 @@ static void ros_cdr_run(void *first, void *second, void *third)
 		LOG_ERR("%s subscription failed: %d", ROS_CDR_TOPIC_NAME, result);
 		return;
 	}
+
+	role_identity_init(ctx);
 
 	while ((result = transport_open(ctx)) < 0) {
 		LOG_WRN("Zenoh router unavailable: %d", result);
