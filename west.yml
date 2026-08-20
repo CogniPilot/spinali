@@ -52,5 +52,5 @@ manifest:
       path: modules/lib/hcdf_models
     - name: zenoh-pico
       url: https://github.com/CogniPilot/zenoh-pico.git
-      revision: 7af9ea7f57cda7e2810b98a3ce6a67bbb4e1d2af
+      revision: 2019ae3394b79955705f9a78c9f32d76b3b845ce
       path: modules/lib/zenoh-pico
