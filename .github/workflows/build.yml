@@ -52,7 +52,12 @@ jobs:
           west init -l .
           west update
           west blobs fetch hal_afbr
-          ./scripts/cyecca_install
+
+      - name: Generate Synapse FBS package
+        working-directory: spinali
+        run: |
+          ./scripts/synapse_fbs_package "$GITHUB_WORKSPACE/synapse_fbs-build" | tee synapse_fbs_env
+          grep '^SPINALI_SYNAPSE_FBS_ROOT=' synapse_fbs_env >> "$GITHUB_ENV"
 
       - name: Format Check
         working-directory: spinali

@@ -36,7 +36,7 @@ manifest:
           - zcbor
     - name: zros
       remote: cognipilot
-      revision: 3f80b3ba8803abc02ad7382cc027658b05c07ca6 # main
+      revision: 4e8a7a53a935b61106a7e3065f74b7bbe2cac28f # convergence
       path: modules/lib/zros
     - name: zros_drivers
       remote: cognipilot

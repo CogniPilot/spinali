@@ -70,7 +70,9 @@ target_sources(app PRIVATE ${SOURCE_FILES})
 if(CONFIG_SPINALI_SYNAPSE_WIRE)
   if(NOT TARGET synapse_fbs::wire)
     message(FATAL_ERROR
-      "SPINALI_SYNAPSE_FBS_ROOT must provide synapse_fbs::wire"
+      "SPINALI_SYNAPSE_FBS_ROOT must provide synapse_fbs::wire. "
+      "Generate the package with scripts/synapse_fbs_package and set "
+      "SPINALI_SYNAPSE_FBS_ROOT to its printed path."
     )
   endif()
   target_link_libraries(app PRIVATE synapse_fbs::wire)
@@ -79,7 +81,9 @@ endif()
 if(CONFIG_SPINALI_SYNAPSE_ROS_CDR)
   if(NOT TARGET synapse_fbs::cdr)
     message(FATAL_ERROR
-      "SPINALI_SYNAPSE_FBS_ROOT must provide synapse_fbs::cdr"
+      "SPINALI_SYNAPSE_FBS_ROOT must provide synapse_fbs::cdr. "
+      "Generate the package with scripts/synapse_fbs_package and set "
+      "SPINALI_SYNAPSE_FBS_ROOT to its printed path."
     )
   endif()
   target_link_libraries(app PRIVATE synapse_fbs::cdr)
