@@ -66,6 +66,7 @@ LOG_MODULE_REGISTER(pps_servo, LOG_LEVEL_INF);
 #define UNLOCK_THRESHOLD_NS 10000LL   /* |err| above this drops lock */
 #define LOCK_COUNT	  5
 #define RTC_UPDATE_PERIOD_S 3600
+#define RTC_RETRY_BACKOFF_S 60 /* re-attempt cadence after a failed RTC write */
 #define TP_STALE_MS	  1500
 
 /* Announced grandmaster quality. Class 6 is a clock synchronized to a
@@ -124,7 +125,19 @@ struct pps_servo {
 	atomic_t ever_locked;
 	uint32_t lock_streak;
 	uint32_t sample_count;
-	int64_t last_rtc_update_s;
+	/* Once-per-hour RTC discipline, performed on a dedicated low-priority
+	 * workqueue rather than the servo path. rtc_next_attempt_s is the
+	 * earliest GNSS second at which the next write may be attempted; every
+	 * completed attempt advances it, by a full period on success and by a
+	 * short backoff on failure, so a failing RTC backs off instead of
+	 * re-firing the blocking write every second. rtc_update_pending drops a
+	 * request while a write is already in flight, and rtc_failed gates the
+	 * failure log to one line per entry into the failed state.
+	 */
+	int64_t rtc_next_attempt_s;
+	uint64_t rtc_target_ns;
+	bool rtc_update_pending;
+	bool rtc_failed;
 
 	uint8_t announced_class;
 	int16_t utc_offset;
@@ -134,9 +147,21 @@ struct pps_servo {
 
 	struct k_work work;
 	struct k_work_delayable holdover_work;
+	struct k_work rtc_work;
 };
 
 static struct pps_servo servo;
+
+/* The battery-domain RTC write (rtc_set_time) busy-waits on the write-
+ * protect handshake with interrupts locked, so it must never run on a
+ * workqueue that the discipline servo, holdover detection, or gPTP-adjacent
+ * work depends on. It runs here instead: a dedicated queue at the bottom of
+ * the application priority band whose only job is the once-per-hour RTC
+ * update, so a slow or broken RTC can never stall the servo path.
+ */
+#define RTC_WORKQ_STACK_SIZE 1024
+K_KERNEL_STACK_DEFINE(rtc_workq_stack, RTC_WORKQ_STACK_SIZE);
+static struct k_work_q rtc_workq;
 
 /* Days-from-civil inverse (Howard Hinnant's algorithm) for RTC set. */
 static void unix_to_civil(int64_t unix_s, struct rtc_time *out)
@@ -216,33 +241,86 @@ static int label_to_ptp_ns(const struct ubx_tim_tp *tp, uint64_t *ptp_ns)
 	return 0;
 }
 
-static void servo_update_rtc(uint64_t gnss_ptp_ns)
+/* Perform the blocking battery-domain RTC write on the dedicated queue.
+ * The leap read and civil conversion are cheap; the RTC write busy-waits
+ * with interrupts locked, which is why the whole thing is kept off the
+ * servo workqueue. Every completed attempt advances rtc_next_attempt_s so
+ * the caller reschedules itself: a full period on success, a short backoff
+ * on failure, so a broken RTC can never re-fire the write every second.
+ */
+static void servo_rtc_work_handler(struct k_work *work)
 {
+	ARG_UNUSED(work);
+
 	struct ubx_nav_timels timels;
 	struct rtc_time rt;
-	int64_t tai_s = (int64_t)(gnss_ptp_ns / NSEC_PER_SEC);
-	int err;
+	uint64_t target_ns;
+	int64_t tai_s;
+	int err = -EAGAIN; /* leap-second data not yet available */
+	bool ok = false;
 
-	if (servo.rtc == NULL) {
-		return;
+	K_SPINLOCK(&servo.lock) {
+		target_ns = servo.rtc_target_ns;
+	}
+	tai_s = (int64_t)(target_ns / NSEC_PER_SEC);
+
+	if ((servo.rtc != NULL) &&
+	    (u_blox_f9p_leap_get(servo.gnss, &timels) == 0) &&
+	    ((timels.valid & UBX_NAV_TIMELS_VALID_CURR_LS) != 0U)) {
+		unix_to_civil(tai_s - GPS_TAI_OFFSET - timels.curr_ls, &rt);
+		err = rtc_set_time(servo.rtc, &rt);
+		ok = (err == 0);
 	}
 
-	if ((u_blox_f9p_leap_get(servo.gnss, &timels) != 0) ||
-	    ((timels.valid & UBX_NAV_TIMELS_VALID_CURR_LS) == 0U)) {
-		return;
+	bool report_failure = false;
+
+	K_SPINLOCK(&servo.lock) {
+		if (ok) {
+			servo.rtc_next_attempt_s = tai_s + RTC_UPDATE_PERIOD_S;
+			servo.rtc_failed = false;
+		} else {
+			servo.rtc_next_attempt_s = tai_s + RTC_RETRY_BACKOFF_S;
+			report_failure = !servo.rtc_failed;
+			servo.rtc_failed = true;
+		}
+		servo.rtc_update_pending = false;
 	}
 
-	unix_to_civil(tai_s - GPS_TAI_OFFSET - timels.curr_ls, &rt);
-
-	err = rtc_set_time(servo.rtc, &rt);
-	if (err != 0) {
-		LOG_WRN("RTC set failed: %d", err);
-	} else {
-		servo.last_rtc_update_s = tai_s;
+	if (ok) {
 		LOG_INF("RTC set from GNSS: %04d-%02d-%02d %02d:%02d:%02d UTC",
 			rt.tm_year + 1900, rt.tm_mon + 1, rt.tm_mday,
 			rt.tm_hour, rt.tm_min, rt.tm_sec);
+	} else if (report_failure) {
+		LOG_WRN("RTC update failed (%d) - backing off %d s", err,
+			RTC_RETRY_BACKOFF_S);
 	}
+}
+
+/* Queue a one-shot RTC update on the dedicated queue. Idempotent while a
+ * write is in flight: a second request is dropped rather than piled up.
+ * Returns true when a fresh write was actually submitted.
+ */
+static bool servo_request_rtc_update(uint64_t gnss_ptp_ns)
+{
+	bool submit = false;
+
+	if (servo.rtc == NULL) {
+		return false;
+	}
+
+	K_SPINLOCK(&servo.lock) {
+		if (!servo.rtc_update_pending) {
+			servo.rtc_target_ns = gnss_ptp_ns;
+			servo.rtc_update_pending = true;
+			submit = true;
+		}
+	}
+
+	if (submit) {
+		(void)k_work_submit_to_queue(&rtc_workq, &servo.rtc_work);
+	}
+
+	return submit;
 }
 
 /* Refresh the announced UTC offset and leap-second flags from the
@@ -465,7 +543,7 @@ static void servo_work_handler(struct k_work *work)
 				atomic_set(&servo.ever_locked, 1);
 				LOG_INF("Servo LOCKED (|err| < %lld ns for %d samples)",
 					LOCK_THRESHOLD_NS, LOCK_COUNT);
-				servo_update_rtc(gnss_ns);
+				servo_request_rtc_update(gnss_ns);
 				servo_announce(GM_CLASS_LOCKED, "locked");
 			}
 		}
@@ -479,10 +557,10 @@ static void servo_work_handler(struct k_work *work)
 	}
 
 	if (servo.locked &&
-	    ((int64_t)(gnss_ns / NSEC_PER_SEC) - servo.last_rtc_update_s >=
-	     RTC_UPDATE_PERIOD_S)) {
-		servo_update_rtc(gnss_ns);
-		servo_announce_time_props();
+	    ((int64_t)(gnss_ns / NSEC_PER_SEC) >= servo.rtc_next_attempt_s)) {
+		if (servo_request_rtc_update(gnss_ns)) {
+			servo_announce_time_props();
+		}
 	}
 
 	LOG_INF("servo: err %+6lld ns, corr %+6d ppb (int %+6d), lat %u, %s",
@@ -545,10 +623,27 @@ static int pps_servo_init(void)
 
 	k_work_init(&servo.work, servo_work_handler);
 	k_work_init_delayable(&servo.holdover_work, holdover_work_handler);
+	k_work_init(&servo.rtc_work, servo_rtc_work_handler);
 
 	if (!device_is_ready(servo.phc) || !device_is_ready(servo.gnss)) {
 		LOG_ERR("Servo devices not ready");
 		return -ENODEV;
+	}
+
+	/* Dedicated low-priority queue for the blocking RTC write, started
+	 * only when an RTC is present. At the bottom of the application band
+	 * it can never starve the servo, holdover, or gPTP work, and its
+	 * write-protect busy-wait stays off the shared system workqueue.
+	 */
+	if (servo.rtc != NULL) {
+		static const struct k_work_queue_config rtc_workq_cfg = {
+			.name = "rtc_disc",
+		};
+
+		k_work_queue_init(&rtc_workq);
+		k_work_queue_start(&rtc_workq, rtc_workq_stack,
+				   K_KERNEL_STACK_SIZEOF(rtc_workq_stack),
+				   K_LOWEST_APPLICATION_THREAD_PRIO, &rtc_workq_cfg);
 	}
 
 	/* Seed the PHC from the RTC if it holds plausible time, so the
