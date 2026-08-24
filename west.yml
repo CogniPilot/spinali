@@ -19,7 +19,7 @@ manifest:
     - name: zephyr
       remote: cognipilot
       west-commands: scripts/west-commands.yml
-      revision: 85216b72231c5aea52cf31deb678e9405c83a164
+      revision: 72d5ac4afcbb51a97c253d88d4515a5633ff2840 # platinum-next: step threshold, icm45686 rate limit, crsf hardening
       import:
         - name-allowlist:
           - mbedtls
