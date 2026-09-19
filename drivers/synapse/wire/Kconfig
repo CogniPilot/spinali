@@ -30,6 +30,23 @@ config SPINALI_SYNAPSE_WIRE_TOPIC_GNSS_FIX
 
 endchoice
 
+config SPINALI_SYNAPSE_WIRE_TOPIC_OPTICAL_FLOW_RAW
+	bool "Also publish the raw OpticalFlowData stream"
+	depends on SPINALI_VEHICLE_OPTICAL_FLOW
+	default y if SPINALI_SYNAPSE_WIRE_TOPIC_OPTICAL_FLOW
+	help
+	  Publish the fixed-layout OpticalFlowData sample (integrated flow angles,
+	  the delta angle over the same window, integration time, range and
+	  quality) on its own UDP port beside the primary stream. The vehicle's
+	  tightly coupled flow path fuses these fields and forms the velocity
+	  itself; the 32-byte OpticalFlowVelocity sample does not carry them.
+
+config SPINALI_SYNAPSE_WIRE_OPTICAL_FLOW_RAW_PORT
+	int "Raw OpticalFlowData UDP port"
+	depends on SPINALI_SYNAPSE_WIRE_TOPIC_OPTICAL_FLOW_RAW
+	range 1 65535
+	default 46011
+
 config SPINALI_SYNAPSE_WIRE_DESTINATION
 	string "Destination IPv6 address"
 	default "fe80::4:9fff:fe00:150"
